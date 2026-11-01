@@ -3,7 +3,7 @@ export type VehType = "light" | "medium" | "heavy" | "td" | "spg"
 export type Role = "scout" | "flank" | "sniper" | "assault" | "breach" | "support" | "ambush"
 export type ShellKind = "ap" | "apcr" | "he"
 export type ActionKind = "attack" | "defend" | "help" | "retreat" | "armor"
-export type Mode = "duel" | "platoon" | "company" | "battle"
+export type Mode = "duel" | "platoon" | "company"
 export type Outcome = "win" | "loss" | "draw"
 export type Distance = 0 | 1 | 2
 

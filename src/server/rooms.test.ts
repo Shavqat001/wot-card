@@ -31,10 +31,31 @@ describe("комната", () => {
     expect(after?.beats.length).toBeGreaterThan(0)
   })
 
-  it("пустую комнату не начать", () => {
+  it("пустую дуэль не начать", () => {
     const hub = new Hub()
-    const host = hub.create("platoon", "t34", [])
+    const host = hub.create("duel", "t34", [])
     if (!("code" in host)) return
     expect(hub.start(host.code, host.you)).toEqual({ kind: "error", text: "жди второго" })
+  })
+
+  it("в стычке гости свои, противник боты", () => {
+    const hub = new Hub()
+    const host = hub.create("platoon", "t34", [])
+    expect("code" in host).toBe(true)
+    if (!("code" in host)) return
+    const guest = hub.join(host.code, "pz4", [])
+    expect("you" in guest).toBe(true)
+    if (!("you" in guest)) return
+    const lobby = hub.lobby(host.code, host.you)
+    expect(lobby?.seats.every((s) => s.side === 0)).toBe(true)
+    const started = hub.start(host.code, host.you)
+    expect(started.kind).toBe("battle")
+    if (started.kind !== "battle") return
+    const mine = started.views.find((view) => view.you === host.you)?.battle
+    const theirs = started.views.find((view) => view.you === guest.you)?.battle
+    expect(mine?.units.filter((u) => u.human).every((u) => u.side === 0)).toBe(true)
+    expect(theirs?.units[theirs.playerIndex].side).toBe(0)
+    expect(theirs?.units[theirs.playerIndex].vid).toBe("pz4")
+    expect(mine?.units.filter((u) => u.side === 1).every((u) => !u.human)).toBe(true)
   })
 })

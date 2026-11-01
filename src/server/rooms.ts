@@ -6,7 +6,7 @@ import type { Battle, Mode, Order } from "../lib/types"
 import { byId } from "../lib/vehicles"
 import type { Lobby } from "../lib/wire"
 
-const MODES: Mode[] = ["duel", "platoon", "company", "battle"]
+const MODES: Mode[] = ["duel", "platoon", "company"]
 const ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 interface Seat {
@@ -96,10 +96,11 @@ export class Hub {
     return this.roomOf(code)?.seats.map((s) => s.id) ?? []
   }
 
-  create(mode: Mode, vehicleId: string, gear: string[]): { error: string } | { code: string; you: string } {
+  create(mode: Mode, vehicleId: string, gear: string[], wanted?: string): { error: string } | { code: string; you: string } {
     if (!MODES.includes(mode)) return { error: "нельзя" }
     if (!knownVehicle(vehicleId)) return { error: "нет машины" }
-    const code = this.freshCode()
+    const ask = wanted?.trim().toUpperCase() ?? ""
+    const code = ask && !this.rooms.has(ask) ? ask : this.freshCode()
     const you = this.nid()
     this.rooms.set(code, {
       code,
@@ -121,9 +122,12 @@ export class Hub {
     const cap = sideCap(room.mode)
     const n0 = room.seats.filter((s) => s.side === 0).length
     const n1 = room.seats.filter((s) => s.side === 1).length
-    if (n0 >= cap && n1 >= cap) return { error: "комната полна" }
-    const prefer: 0 | 1 = n1 < n0 ? 1 : 0
-    const side: 0 | 1 = prefer === 0 && n0 >= cap ? 1 : prefer === 1 && n1 >= cap ? 0 : prefer
+    if (room.mode === "duel") {
+      if (n0 + n1 >= 2) return { error: "комната полна" }
+    } else if (n0 >= cap) {
+      return { error: room.mode === "company" ? "рота полна" : "стычка полна" }
+    }
+    const side: 0 | 1 = room.mode === "duel" ? 1 : 0
     const you = this.nid()
     room.seats.push({ id: you, vehicleId, gear: cleanGear(gear), side })
     if (room.battle?.over) room.battle = null
@@ -133,7 +137,7 @@ export class Hub {
   start(code: string, you: string): OrderResult {
     const room = this.roomOf(code)
     if (!room || room.hostId !== you) return { kind: "error", text: "нельзя" }
-    if (room.seats.length < 2) return { kind: "error", text: "жди второго" }
+    if (room.mode === "duel" && room.seats.length < 2) return { kind: "error", text: "жди второго" }
     if (room.battle && !room.battle.over) return { kind: "error", text: "уже идёт" }
     const allies = room.seats.filter((s) => s.side === 0).map(pilot)
     const enemies = room.seats.filter((s) => s.side === 1).map(pilot)

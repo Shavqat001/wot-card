@@ -10,7 +10,7 @@ interface Sock {
   code: string
 }
 
-const MODES = ["duel", "platoon", "company", "battle"] as const
+const MODES = ["duel", "platoon", "company"] as const
 
 export function attachNet(httpServer: {
   on(event: "upgrade", cb: (req: IncomingMessage, socket: Duplex, head: Buffer) => void): void

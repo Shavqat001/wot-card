@@ -15,6 +15,7 @@
 * { box-sizing: border-box; }
 html, body, #root {
   height: 100%;
+  overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -87,22 +88,40 @@ button:focus-visible { outline: 1px solid var(--brass); outline-offset: 2px; }
   position: relative;
   z-index: 1;
   flex: 1;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: none;
   padding: calc(14px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
 }
 .app.signed .hangar,
 .app.signed .sheet,
 .app.signed .modes,
-.app.signed .result {
+.app.signed .result,
+.app.signed .battle {
   padding-top: 12px;
 }
-.who {
-  position: relative;
-  z-index: 9;
+.chrome {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  width: min(640px, 100%);
+  transform: translateX(-50%);
+  z-index: 32;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 6px 16px;
+  background: var(--bg);
+}
+.chrome-gap {
   flex: 0 0 auto;
-  align-self: flex-start;
-  padding: calc(8px + env(safe-area-inset-top)) 16px 2px;
-  max-width: 48%;
+  height: calc(42px + env(safe-area-inset-top));
+  pointer-events: none;
+}
+.who {
+  min-width: 0;
+  max-width: 58%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -111,6 +130,63 @@ button:focus-visible { outline: 1px solid var(--brass); outline-offset: 2px; }
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--brass);
+}
+.cog {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 2px;
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.cog.on { color: var(--brass); }
+.cogmenu, .cogpane {
+  position: absolute;
+  top: calc(100% - 2px);
+  right: 16px;
+  width: 220px;
+  background: #171c17;
+  border: 1px solid var(--line);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .55);
+}
+.cogmenu {
+  display: flex;
+  flex-direction: column;
+}
+.cogmenu button {
+  min-height: 44px;
+  padding: 0 14px;
+  text-align: left;
+  border-bottom: 1px solid #2a3128;
+}
+.cogmenu button:last-child {
+  border-bottom: 0;
+  color: var(--dim);
+}
+.cogpane { padding: 8px 12px 12px; }
+.cogpane .quiet { min-height: 32px; }
+.cogpane p {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 8px 0 0;
+}
+.cogpane small { color: var(--dim); }
+.cogpane b {
+  font-weight: 600;
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cogtoggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
 }
 .auth {
   position: relative;

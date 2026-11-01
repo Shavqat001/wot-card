@@ -4,33 +4,29 @@ export const MODE_LIMIT: Record<Mode, number> = {
   duel: 14,
   platoon: 12,
   company: 10,
-  battle: 8,
 }
 
 export const MODE_NAME: Record<Mode, string> = {
   duel: "Дуэль",
-  platoon: "Взвод",
+  platoon: "Стычка",
   company: "Рота",
-  battle: "Сражение",
 }
 
 export const MODE_SIZE: Record<Mode, string> = {
   duel: "1×1",
   platoon: "5×5",
   company: "7×7",
-  battle: "15×15",
+}
+
+export const MODE_HINT: Record<Mode, string> = {
+  duel: "друг напротив",
+  platoon: "свои вместе, против ботов",
+  company: "свои вместе, против ботов",
 }
 
 const COMP: Record<Exclude<Mode, "duel">, VehType[]> = {
   platoon: ["light", "medium", "medium", "heavy", "td"],
   company: ["light", "medium", "medium", "heavy", "heavy", "td", "spg"],
-  battle: [
-    "light", "light", "light",
-    "medium", "medium", "medium", "medium", "medium",
-    "heavy", "heavy", "heavy", "heavy",
-    "td", "td",
-    "spg",
-  ],
 }
 
 export function teamSlots(mode: Mode, playerType: VehType): VehType[] {

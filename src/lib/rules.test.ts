@@ -176,11 +176,10 @@ describe("раунд", () => {
     expect(actionError(b, { kind: "help", target: 0, shell: null })).toBe("нельзя")
   })
 
-  it("составы 1, 5, 7 и 15", () => {
+  it("составы 1, 5 и 7", () => {
     expect(createBattle("t34", "duel", mulberry32(1)).units).toHaveLength(2)
     expect(createBattle("t34", "platoon", mulberry32(1)).units).toHaveLength(10)
     expect(createBattle("t34", "company", mulberry32(1)).units).toHaveLength(14)
-    expect(createBattle("t34", "battle", mulberry32(1)).units).toHaveLength(30)
     const odd = createBattle("su122", "platoon", mulberry32(2))
     const allies = odd.units.filter((u) => u.side === 0)
     const enemies = odd.units.filter((u) => u.side === 1)

@@ -1,20 +1,22 @@
 import { useState } from "react"
-import { MODE_NAME, MODE_SIZE } from "../lib/modes"
+import { MODE_HINT, MODE_NAME, MODE_SIZE } from "../lib/modes"
 import type { Mode, Vehicle } from "../lib/types"
 import type { Lobby } from "../lib/wire"
 
-const MODES: Mode[] = ["duel", "platoon", "company", "battle"]
+const MODES: Mode[] = ["duel", "platoon", "company"]
 
 export function Gate({
   tank,
   onBack,
   onBots,
   onNet,
+  onOnline,
 }: {
   tank: Vehicle
   onBack: () => void
   onBots: () => void
   onNet: () => void
+  onOnline: () => void
 }) {
   return (
     <main className="modes">
@@ -26,7 +28,11 @@ export function Gate({
       </button>
       <button type="button" className="hatch" onClick={onNet}>
         <b>По сети</b>
-        <small>другие входят по коду</small>
+        <small>этот компьютер, код</small>
+      </button>
+      <button type="button" className="hatch" onClick={onOnline}>
+        <b>Онлайн</b>
+        <small>интернет, тот же код</small>
       </button>
     </main>
   )
@@ -36,6 +42,7 @@ export function NetJoin({
   tank,
   up,
   error,
+  wan,
   onBack,
   onCreate,
   onJoin,
@@ -43,6 +50,7 @@ export function NetJoin({
   tank: Vehicle
   up: boolean
   error: string | null
+  wan?: boolean
   onBack: () => void
   onCreate: (mode: Mode) => void
   onJoin: (code: string) => void
@@ -68,12 +76,13 @@ export function NetJoin({
         />
         <button type="submit">войти</button>
       </form>
+      <p className="going">{wan ? "интернет" : (typeof location !== "undefined" ? location.host : "")}</p>
       {!up && <p className="note">нет связи</p>}
       {error && <p className="note">{error}</p>}
       {MODES.map((m, i) => (
         <button key={m} type="button" className="hatch" style={{ animationDelay: `${i * 70}ms` }} onClick={() => onCreate(m)}>
           <b>{MODE_NAME[m]}</b>
-          <small>{MODE_SIZE[m]} · создать</small>
+          <small>{MODE_HINT[m]} · создать</small>
         </button>
       ))}
     </main>
@@ -83,11 +92,13 @@ export function NetJoin({
 export function RoomLobby({
   lobby,
   error,
+  wan,
   onBack,
   onStart,
 }: {
   lobby: Lobby
   error: string | null
+  wan?: boolean
   onBack: () => void
   onStart: () => void
 }) {
@@ -96,7 +107,7 @@ export function RoomLobby({
     <main className="modes">
       <button type="button" className="back" onClick={onBack}>назад</button>
       <p className="roomcode">{lobby.code}</p>
-      <p className="going">{MODE_NAME[lobby.mode]} · {typeof location !== "undefined" ? location.host : ""}</p>
+      <p className="going">{MODE_NAME[lobby.mode]} · {wan ? "онлайн" : (typeof location !== "undefined" ? location.host : "")}</p>
       <ul className="seats">
         {lobby.seats.map((s, i) => (
           <li key={`${s.name}-${i}`} className={s.you ? "you" : ""}>

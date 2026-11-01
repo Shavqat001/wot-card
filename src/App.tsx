@@ -13,6 +13,7 @@ import type { Battle, BattleStats, Country, FoeNote, Mode, Outcome, Role, VehTyp
 import { byId, fork, gunArcText, successors, VEHICLES } from "./lib/vehicles"
 import type { Lobby } from "./lib/wire"
 import { Auth } from "./ui/Auth"
+import { Chrome } from "./ui/Chrome"
 import { playBegin, startMusic, startTheme, stopMusic } from "./ui/sound"
 import { BattleScreen } from "./ui/BattleScreen"
 import { DepotScreen } from "./ui/Depot"
@@ -29,7 +30,7 @@ import { useNet } from "./ui/useNet"
 
 const HUBS: Hub[] = ["hangar", "depot", "research", "shop"]
 
-const MODES: Mode[] = ["duel", "platoon", "company", "battle"]
+const MODES: Mode[] = ["duel", "platoon", "company"]
 
 function Atmosphere() {
   return (
@@ -85,6 +86,7 @@ export default function App() {
   const [report, setReport] = useState<BattleStats | null>(null)
   const [openLines, setOpenLines] = useState(false)
   const [online, setOnline] = useState(false)
+  const [wan, setWan] = useState(false)
   const [opening, setOpening] = useState<Battle | null>(null)
   const [lobby, setLobby] = useState<Lobby | null>(null)
   const [netErr, setNetErr] = useState<string | null>(null)
@@ -232,9 +234,7 @@ export default function App() {
   return (
     <div className="app signed">
       <Atmosphere />
-      <button type="button" className="who" title="выйти" aria-label="выйти" onClick={() => void signOut()}>
-        {nick}
-      </button>
+      <Chrome nick={nick} save={save} onExit={() => void signOut()} />
       {screen === "hangar" && (
         <Hangar
           save={save}
@@ -301,6 +301,14 @@ export default function App() {
           onBack={() => setScreen("hangar")}
           onBots={() => setScreen("bots")}
           onNet={() => {
+            setWan(false)
+            net.goLocal()
+            setNetErr(null)
+            setScreen("net")
+          }}
+          onOnline={() => {
+            setWan(true)
+            net.goOnline()
             setNetErr(null)
             setScreen("net")
           }}
@@ -325,7 +333,11 @@ export default function App() {
           tank={selected}
           up={net.up}
           error={netErr}
-          onBack={() => setScreen("modes")}
+          wan={wan}
+          onBack={() => {
+            net.goLocal()
+            setScreen("modes")
+          }}
           onCreate={(m) => net.send({ t: "create", mode: m, vehicleId: save.selected, gear: save.gear[save.selected] ?? [] })}
           onJoin={(code) => net.send({ t: "join", code, vehicleId: save.selected, gear: save.gear[save.selected] ?? [] })}
         />
@@ -334,6 +346,7 @@ export default function App() {
         <RoomLobby
           lobby={lobby}
           error={netErr}
+          wan={wan}
           onBack={() => {
             net.send({ t: "leave" })
             setLobby(null)

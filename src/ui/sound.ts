@@ -17,12 +17,54 @@ const POOLS: Record<string, string[]> = {
 
 const MUSIC = "bg.mp3"
 const THEME = "Main_Theme.mp3"
+const PREF_KEY = "angar.opt"
 
 const cache = new Map<string, HTMLAudioElement>()
 let ctx: AudioContext | null = null
 let bed: HTMLAudioElement | null = null
 let theme: HTMLAudioElement | null = null
 let warmed = false
+const pref = readPref()
+
+function readPref() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PREF_KEY) ?? "null") as { music?: boolean; sfx?: boolean } | null
+    return { music: raw?.music !== false, sfx: raw?.sfx !== false }
+  } catch {
+    return { music: true, sfx: true }
+  }
+}
+
+function savePref() {
+  try {
+    localStorage.setItem(PREF_KEY, JSON.stringify(pref))
+  } catch {
+    /* нет записи */
+  }
+}
+
+export function musicEnabled() {
+  return pref.music
+}
+
+export function sfxEnabled() {
+  return pref.sfx
+}
+
+export function setMusic(on: boolean) {
+  pref.music = on
+  savePref()
+  if (on) startMusic()
+  else {
+    stopMusic()
+    stopTheme()
+  }
+}
+
+export function setSfx(on: boolean) {
+  pref.sfx = on
+  savePref()
+}
 
 function context(): AudioContext | null {
   try {
@@ -60,6 +102,7 @@ function pick(files: string[]): string {
 }
 
 function playFile(file: string, volume: number) {
+  if (!pref.sfx) return
   const el = source(file).cloneNode(true) as HTMLAudioElement
   el.volume = volume
   void el.play().catch(() => {})
@@ -88,7 +131,7 @@ function hush(el: HTMLAudioElement | null) {
 }
 
 export function startTheme() {
-  if (document.visibilityState === "hidden") return
+  if (!pref.music || document.visibilityState === "hidden") return
   warm()
   hush(bed)
   const el = themeEl()
@@ -100,7 +143,7 @@ export function stopTheme() {
 }
 
 export function startMusic() {
-  if (document.visibilityState === "hidden") return
+  if (!pref.music || document.visibilityState === "hidden") return
   warm()
   hush(theme)
   const el = bedEl()
@@ -118,6 +161,7 @@ function playPool(key: string, volume: number) {
 }
 
 function tone(freq: number, at: number, dur: number, gain: number, type: OscillatorType) {
+  if (!pref.sfx) return
   const ac = context()
   if (!ac) return
   const osc = ac.createOscillator()
