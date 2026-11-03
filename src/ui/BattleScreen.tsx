@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react"
-import { actionError, autoFinish, createBattle, shellOf, step } from "../lib/battle"
+import { actionError, autoFinish, createBattle, idleStep, shellOf, step } from "../lib/battle"
 import { fit } from "../lib/gear"
 import { MODE_NAME } from "../lib/modes"
 import { gunWord } from "../lib/shot"
@@ -66,13 +66,12 @@ export function BattleScreen({
   const [phase, setPhase] = useState<"idle" | "windup" | "volley" | "wreck">("idle")
   const [shell, setShell] = useState<ShellKind>("ap")
   const [sel, setSel] = useState<number | null>(null)
-  const [aid, setAid] = useState<number | null>(null)
   const [clock, setClock] = useState(10)
   const [bonus, setBonus] = useState(false)
   const [intro, setIntro] = useState(true)
   const [hold, setHold] = useState(false)
   const [warn, setWarn] = useState<string | null>(null)
-  const [nudge, setNudge] = useState<"enemy" | "ally" | null>(null)
+  const [nudge, setNudge] = useState<"enemy" | null>(null)
   const [shake, setShake] = useState(false)
   const [spots, setSpots] = useState<{ x: number; y: number }[] | null>(null)
   const before = useRef(battle.units.map(() => true))
@@ -137,7 +136,16 @@ export function BattleScreen({
       later(1100, () => setWarn(null))
       return
     }
-    act({ kind: "defend", target: null, shell: null })
+    if (boot.online) {
+      setHold(true)
+      setWarn("простой")
+      later(1100, () => setWarn(null))
+      return
+    }
+    busy.current = true
+    setWarn("простой")
+    later(900, () => setWarn(null))
+    play(idleStep(live.current, rng.current))
   }, [clock, phase, battle.over, hold])
 
   function later(ms: number, fn: () => void) {
@@ -176,8 +184,11 @@ export function BattleScreen({
     later(wind, () => {
       setPhase("volley")
       next.beats.forEach((b, i) => later(Math.min(i, 8) * 80, () => {
-        if (!b.own && i > 4) return
-        playShot(b.caliber || 75, b.sniper, b.arty)
+        const me = next.playerIndex
+        const mine = b.shooter === me
+        const atMe = b.target === me
+        if (!mine && !atMe) return
+        playShot(b.caliber || 75, b.sniper, b.arty, mine ? 0.48 : 0.32)
         later(160, () => playHit(b.verb, b.killed))
       }))
       setShake(hurt)
@@ -216,7 +227,6 @@ export function BattleScreen({
     if (err) {
       setWarn(err)
       if (err === "выбери цель") setNudge("enemy")
-      else if (err === "выбери своего") setNudge("ally")
       later(700, () => {
         setWarn(null)
         setNudge(null)
@@ -246,14 +256,8 @@ export function BattleScreen({
   function tapCard(i: number) {
     const u = battle.units[i]
     if (phase !== "idle" || !u.alive || !u.present || u.player) return
-    if (u.side === me.side) {
-      if (mode === "duel") return
-      setAid(i)
-      setSel(null)
-      return
-    }
+    if (u.side === me.side) return
     setSel(i)
-    setAid(null)
     setWarn(null)
   }
 
@@ -268,7 +272,6 @@ export function BattleScreen({
         ? sparkOf(hits.find((b) => b.own)?.verb ?? hits[0].verb, hits.some((b) => b.killed))
         : ""
       const fired = phase === "volley" && battle.beats.some((b) => b.shooter === i)
-      const aided = watching && battle.units.some((u) => u.action === "help" && u.target === i)
       const dead = !unit.alive && (!watching || !wasUp)
       const away = unit.alive && !unit.present && (!watching || !wasUp)
       const ratio = Math.max(0, Math.min(1, (hp[i] ?? unit.hp) / unit.maxHp))
@@ -284,11 +287,9 @@ export function BattleScreen({
               unit.player ? "me" : "",
               unit.player && loaded && phase === "idle" ? "ready" : "",
               phase === "idle" && sel === i ? "sel" : "",
-              phase === "idle" && aid === i ? "mark" : "",
               pose ? `pose-${pose}` : "",
               spark,
               fired ? "muzzle-on" : "",
-              aided ? "aided" : "",
               dead ? "wreck" : "",
               away ? "away" : "",
             ].filter(Boolean).join(" ")}
@@ -324,7 +325,7 @@ export function BattleScreen({
         <div className={nudge === "enemy" ? "lane enemy need" : "lane enemy"}>{lane(1)}</div>
         <div className={intro ? "range dim" : "range"} aria-hidden><span className="vs">VS</span></div>
         {intro && <div className="versus"><span>VS</span></div>}
-        <div className={nudge === "ally" ? "lane ally need" : "lane ally"}>{lane(0)}</div>
+        <div className="lane ally">{lane(0)}</div>
         {phase === "volley" && spots && (
           <svg className="fx" aria-hidden>
             {battle.beats.map((b, i) => {
@@ -390,8 +391,7 @@ export function BattleScreen({
       <div className="acts">
         <button type="button" disabled={!canAct} onClick={() => act({ kind: "attack", target: sel, shell })}>Атака</button>
         <button type="button" disabled={!canAct} onClick={() => act({ kind: "defend", target: null, shell: null })}>Защита</button>
-        <button type="button" disabled={!canAct} onClick={() => act({ kind: "help", target: aid, shell: null })}>Помощь</button>
-        <button type="button" disabled={!canAct} onClick={() => act({ kind: "retreat", target: null, shell: null })}>Отход</button>
+        <button type="button" disabled={!canAct} onClick={() => act({ kind: "retreat", target: null, shell: null })}>ромб 45°</button>
         <button type="button" disabled={!canAct} onClick={() => act({ kind: "armor", target: loaded ? sel : null, shell: loaded ? shell : null })}>Броня</button>
       </div>
     </section>

@@ -42,55 +42,73 @@ export function Auth({ onOk }: { onOk: (ok: AuthOk) => void }) {
 
   return (
     <main className="auth">
-      <h1>Стальной ангар</h1>
-      <div className="tabs">
-        <button
-          type="button"
-          className={tab === "in" ? "on" : ""}
-          onClick={() => { setTab("in"); setErr(null) }}
-        >
-          вход
-        </button>
-        <button
-          type="button"
-          className={tab === "up" ? "on" : ""}
-          onClick={() => { setTab("up"); setErr(null) }}
-        >
-          регистрация
-        </button>
-      </div>
-      <form onSubmit={(e) => void submit(e)}>
-        <input
-          name="nick"
-          autoComplete="username"
-          maxLength={16}
-          placeholder="ник"
-          value={nick}
-          onChange={(e) => setNick(e.target.value)}
-        />
-        <input
-          name="pass"
-          type="password"
-          autoComplete={tab === "up" ? "new-password" : "current-password"}
-          placeholder="пароль"
-          value={pass}
-          onChange={(e) => setPass(e.target.value)}
-        />
-        {tab === "up" && (
-          <input
-            name="again"
-            type="password"
-            autoComplete="new-password"
-            placeholder="ещё раз"
-            value={again}
-            onChange={(e) => setAgain(e.target.value)}
-          />
-        )}
-        {err && <p className="note">{err}</p>}
-        <button type="submit" className="go" disabled={busy}>
-          {tab === "up" ? "создать" : "войти"}
-        </button>
-      </form>
+      <img className="auth-tank" src={`${import.meta.env.BASE_URL}tanks/t34.png`} alt="" draggable={false} />
+      <section className="auth-card">
+        <p className="auth-kicker">экипаж на позиции</p>
+        <h1>Стальной<br />ангар</h1>
+        <p className="auth-lead">Позывной открывает ворота. Техника уже прогрета.</p>
+        <div className="tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "in"}
+            className={tab === "in" ? "on" : ""}
+            onClick={() => { setTab("in"); setErr(null) }}
+          >
+            вход
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "up"}
+            className={tab === "up" ? "on" : ""}
+            onClick={() => { setTab("up"); setErr(null) }}
+          >
+            регистрация
+          </button>
+        </div>
+        <form onSubmit={(e) => void submit(e)}>
+          <label>
+            <span>позывной</span>
+            <input
+              name="nick"
+              autoComplete="username"
+              maxLength={16}
+              placeholder="ник"
+              value={nick}
+              onChange={(e) => setNick(e.target.value)}
+            />
+          </label>
+          <label>
+            <span>пароль</span>
+            <input
+              name="pass"
+              type="password"
+              autoComplete={tab === "up" ? "new-password" : "current-password"}
+              placeholder="не короче 4"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+            />
+          </label>
+          {tab === "up" && (
+            <label>
+              <span>ещё раз</span>
+              <input
+                name="again"
+                type="password"
+                autoComplete="new-password"
+                placeholder="повторите пароль"
+                value={again}
+                onChange={(e) => setAgain(e.target.value)}
+              />
+            </label>
+          )}
+          {err && <p className="note" role="alert">{err}</p>}
+          <button type="submit" className="go" disabled={busy}>
+            {busy ? "связь…" : tab === "up" ? "заступить" : "в бой"}
+          </button>
+        </form>
+      </section>
     </main>
   )
 }

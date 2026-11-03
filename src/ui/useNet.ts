@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { Mqtt } from "../lib/mqtt"
 import type { Battle } from "../lib/types"
 import type { ClientMsg, Lobby, ServerMsg } from "../lib/wire"
 import { Online } from "./online"
@@ -14,13 +15,16 @@ export function useNet() {
     lobby: (_lobby: Lobby) => {},
     error: (_text: string) => {},
     bye: () => {},
+    chat: (_msg: Extract<ServerMsg, { t: "chat" }>) => {},
   })
+  const hall = useRef<Mqtt | null>(null)
 
   function take(msg: ServerMsg) {
     if (msg.t === "battle") handlers.current.battle(msg.battle)
     else if (msg.t === "lobby") handlers.current.lobby(msg)
     else if (msg.t === "error") handlers.current.error(msg.text)
     else if (msg.t === "bye") handlers.current.bye()
+    else if (msg.t === "chat") handlers.current.chat(msg)
   }
 
   useEffect(() => {
@@ -53,11 +57,28 @@ export function useNet() {
       }
     }
     open()
+    const link = new Mqtt()
+    hall.current = link
+    link.onUp = () => link.sub("steelhangar/hall")
+    link.onNote = (topic, text) => {
+      if (!topic.endsWith("/hall")) return
+      try {
+        const pack = JSON.parse(text) as { body?: ServerMsg }
+        if (pack.body?.t === "chat") take(pack.body)
+      } catch {
+        /* чужой пакет */
+      }
+    }
+    const bytes = crypto.getRandomValues(new Uint8Array(4))
+    const hallId = [...bytes].map((n) => n.toString(16).padStart(2, "0")).join("")
+    link.connect(`angar-hall-${hallId}`)
     return () => {
       stop = true
       window.clearTimeout(timer)
       ws?.close()
       wan.current?.close()
+      link.close()
+      hall.current = null
     }
   }, [])
 
@@ -82,6 +103,15 @@ export function useNet() {
   }
 
   function send(msg: ClientMsg) {
+    if (msg.t === "say") {
+      const ws = sock.current
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
+      hall.current?.pub("steelhangar/hall", JSON.stringify({
+        from: "hall",
+        body: { t: "chat", id: msg.id, nick: msg.nick, text: msg.text },
+      }))
+      return
+    }
     if (via.current === "online") {
       if (!wan.current) goOnline()
       void wan.current?.send(msg)

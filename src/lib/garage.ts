@@ -1,6 +1,5 @@
 import { gearById } from "./gear"
 import { GOLD_PACKS, GOLD_TO_SILVER, GOLD_TO_XP, shellPackPrice } from "./shop"
-import { HOME_COUNTRIES } from "./text"
 import type { ShellKind, Vehicle } from "./types"
 import { byId, successors, VEHICLES } from "./vehicles"
 
@@ -24,11 +23,11 @@ export interface Save {
   depot: Depot
 }
 
-/** IV–VII СССР, Германии и США открыты в ангаре. Остальные нации — в исследовании. */
+/** Стартовые лёгкие III уровня: СССР, Германия, США. */
+export const STARTER_TANKS = ["t46", "pz2", "m3st"] as const
+
 export function parkIds(): string[] {
-  return VEHICLES
-    .filter((v) => v.tier >= 4 && v.tier < 8 && HOME_COUNTRIES.includes(v.country))
-    .map((v) => v.id)
+  return [...STARTER_TANKS]
 }
 
 export const PARK = parkIds()
@@ -44,18 +43,12 @@ export function freshSave(): Save {
     gold: 0,
     bonds: 0,
     freeXp: 0,
-    owned: parkIds(),
+    owned: [...STARTER_TANKS],
     xp: {},
-    selected: "t34",
+    selected: STARTER_TANKS[0],
     gear: {},
     depot: emptyDepot(),
   }
-}
-
-function withPark(save: Save): Save {
-  const extra = parkIds().filter((id) => !save.owned.includes(id))
-  if (!extra.length) return save
-  return { ...save, owned: [...save.owned, ...extra] }
 }
 
 export function loadSave(raw: string | null): { save: Save; rebuilt: boolean } {
@@ -64,7 +57,7 @@ export function loadSave(raw: string | null): { save: Save; rebuilt: boolean } {
     const data = JSON.parse(raw) as Partial<Save>
     const save = asSave(data)
     if (!save) return { save: freshSave(), rebuilt: true }
-    return { save: withPark(normalizeGear(save)), rebuilt: false }
+    return { save: normalizeGear(save), rebuilt: false }
   } catch {
     return { save: freshSave(), rebuilt: true }
   }
@@ -89,7 +82,7 @@ function asSave(data: Partial<Save> & { credits?: number }): Save | null {
   if (data.gear != null && typeof data.gear !== "object") return null
   return {
     v: 2,
-    silver,
+    silver: Math.max(0, silver),
     gold,
     bonds,
     freeXp: data.freeXp,
@@ -263,6 +256,9 @@ export function canBuy(save: Save, id: string, have = new Set(save.owned)): bool
   if (save.silver < v.cost) return false
   if (v.pred) {
     if (!have.has(v.pred)) return false
+    const prev = byId(v.pred)
+    /* только следующий уровень ветки, без прыжка через машину */
+    if (v.tier > prev.tier + 1) return false
     return (save.xp[v.pred] ?? 0) >= v.xp
   }
   return save.freeXp >= v.xp
@@ -294,7 +290,7 @@ export function applyReward(
   xp[vehicleId] = (xp[vehicleId] ?? 0) + gained.onVehicle
   return {
     ...save,
-    silver: save.silver + gained.credits,
+    silver: Math.max(0, save.silver + gained.credits),
     freeXp: save.freeXp + gained.freeXp,
     xp,
   }

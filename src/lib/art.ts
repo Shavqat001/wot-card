@@ -1,3 +1,6 @@
+import { byId, successors, VEHICLES } from "./vehicles"
+import { TANK_FILES } from "./tankFiles"
+
 const FALLBACK: Record<string, string> = {
   ms1: "bt7",
   t26: "bt7",
@@ -59,6 +62,54 @@ const FALLBACK: Record<string, string> = {
   vk4502a: "tiger",
 }
 
+const HAVE = new Set(TANK_FILES)
+const memo = new Map<string, string>()
+
+function nearest(start: string): string | null {
+  const seen = new Set<string>()
+  const queue = [start]
+  while (queue.length) {
+    const cur = queue.shift()
+    if (!cur || seen.has(cur)) continue
+    seen.add(cur)
+    if (HAVE.has(cur)) return cur
+    const mapped = FALLBACK[cur]
+    if (mapped && HAVE.has(mapped)) return mapped
+    try {
+      const pred = byId(cur).pred
+      if (pred) queue.push(pred)
+    } catch {
+      /* нет такой машины */
+    }
+    try {
+      for (const kid of successors(cur)) queue.push(kid.id)
+    } catch {
+      /* нет ветки */
+    }
+  }
+  return null
+}
+
+function nationAnchor(id: string): string | null {
+  let country: string
+  let type: string
+  try {
+    const v = byId(id)
+    country = v.country
+    type = v.type
+  } catch {
+    return null
+  }
+  const sameType = VEHICLES.find((v) => v.country === country && v.type === type && HAVE.has(v.id))
+  if (sameType) return sameType.id
+  return VEHICLES.find((v) => v.country === country && HAVE.has(v.id))?.id ?? null
+}
+
+/** Свой файл, иначе ближайший портрет ветки, иначе машина той же нации. */
 export function artId(id: string, _type?: string): string {
-  return FALLBACK[id] ?? id
+  const hit = memo.get(id)
+  if (hit) return hit
+  const found = nearest(id) ?? nationAnchor(id) ?? (HAVE.has("t34") ? "t34" : id)
+  memo.set(id, found)
+  return found
 }

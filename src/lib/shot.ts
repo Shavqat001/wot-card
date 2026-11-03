@@ -69,8 +69,9 @@ export function pickImpact(
     plate = "turretFront"
     angle = 58
   } else if (targetAction === "retreat") {
-    plate = "hullRear"
-    angle = 16
+    /* ромб ~45°: борт под углом, часто рикошет */
+    plate = "hullSide"
+    angle = 72
   } else if (shooterAction === "armor") {
     plate = "hullFront"
     angle = 52
@@ -116,7 +117,7 @@ export function hitChance(s: HitInput): number {
   p -= s.targetCamo * 0.16
   p += (s.view - 320) * 0.0003
   if (s.targetDefend) p -= 0.14
-  if (s.targetRetreat) p -= 0.11
+  if (s.targetRetreat) p -= 0.05
   if (s.targetArmor) p -= 0.03
   if (s.shooterArmor) p -= 0.06
   if (s.targetCovered) p -= 0.09

@@ -77,6 +77,15 @@ export function attachNet(httpServer: {
       } catch {
         return
       }
+      if (msg.t === "say") {
+        const text = clip(msg.text, 180)
+        const nick = clip(msg.nick, 16)
+        const id = clip(msg.id, 40)
+        if (!text || !nick || !id) return
+        const line: ServerMsg = { t: "chat", id, nick, text }
+        for (const client of wss.clients) send(client, line)
+        return
+      }
       const here = sockets.get(ws)
       if (msg.t === "create" || msg.t === "join") {
         if (here) {
@@ -128,6 +137,11 @@ export function attachNet(httpServer: {
     sockets.delete(ws)
     applyLeave(here.code, here.you)
   }
+}
+
+function clip(value: unknown, max: number): string {
+  if (typeof value !== "string") return ""
+  return value.replace(/\s+/g, " ").trim().slice(0, max)
 }
 
 function orderOf(value: Order | undefined): Order {

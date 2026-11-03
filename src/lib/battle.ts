@@ -15,10 +15,8 @@ import { enemySlots, MODE_LIMIT, teamSlots } from "./modes"
 import { emptyShells, repairBill, rewardOf, type Reward } from "./reward"
 import { mulberry32 } from "./rng"
 import {
-  leaveChance,
   pickImpact,
   resolveShot,
-  retreatTo,
   salvoCount,
   shotVerb,
   startDistance,
@@ -42,11 +40,34 @@ function freshStats(): BattleStats {
     damage: [],
     frags: [],
     blocked: 0,
+    ricochets: 0,
+    idle: 0,
     support: [],
     repairHp: 0,
     shells: emptyShells(),
     foes: [],
   }
+}
+
+/** Штраф за бездействие: теряешь прочность и остаёшься открытым. */
+export function punishIdle(battle: Battle, index: number) {
+  const u = battle.units[index]
+  if (!u?.alive || !u.present) return
+  const cut = Math.max(1, Math.round(u.maxHp * 0.1))
+  u.hp = Math.max(0, u.hp - cut)
+  if (u.hp <= 0) {
+    u.hp = 0
+    u.alive = false
+    u.present = false
+  }
+  u.charge = Math.max(0, u.charge - 5)
+  const ledger = book(battle, index)
+  if (ledger) ledger.idle += 1
+  battle.log.push({
+    own: index === battle.playerIndex,
+    focus: true,
+    text: `${byId(u.vid).name}: простой`,
+  })
 }
 
 function tank(battle: Battle, u: Unit): Vehicle {
@@ -360,6 +381,7 @@ export function resolveRound(battle: Battle, rng: () => number): Battle {
     for (const shot of shots) {
       const wall = book(next, ti)
       if (shot.result.blocked > 0 && wall) wall.blocked += shot.result.blocked
+      if (shot.result.ricochet && wall) wall.ricochets += 1
       if (shot.result.crit === "gun") units[ti].nextGun = true
       if (shot.result.crit === "engine") units[ti].nextEngine = true
       if (shot.result.crit === "track") units[ti].nextTrack = true
@@ -443,22 +465,6 @@ export function resolveRound(battle: Battle, rng: () => number): Battle {
   syncFoeDamage(next.stats)
   if (next.ledgers) {
     for (const ledger of Object.values(next.ledgers)) syncFoeDamage(ledger)
-  }
-
-  for (const u of units) {
-    const i = battleIndex(u)
-    if (!wasUp[i] || !u.alive || !u.present || u.action !== "retreat" || u.trackDamaged) continue
-    const v = byId(u.vid)
-    const speed = speedOf(next, u)
-    if (u.distance >= 2) {
-      if (rng() < leaveChance(speed, v.type)) {
-        u.present = false
-        const own = u.player
-        next.log.push({ own, focus: true, text: `${v.name} ушёл` })
-      }
-    } else {
-      u.distance = retreatTo(u.distance, speed)
-    }
   }
 
   for (let i = 0; i < units.length; i++) {
@@ -631,7 +637,8 @@ export function commit(battle: Battle, orders: (Order | null)[], rng: () => numb
       u.target = order.target
       u.shell = order.shell
     } else if (u.human || u.player) {
-      u.action = "defend"
+      punishIdle(next, i)
+      u.action = null
       u.target = null
       u.shell = null
     } else {
@@ -689,12 +696,16 @@ export function settle(
   const v = byId(u.vid)
   const left = u.alive && !u.present
   const stayed = u.alive && u.present
+  const pens = battle.stats.foes.reduce((s, f) => s + f.pens, 0)
   return rewardOf({
     shooterTier: v.tier,
     ownHp: u.maxHp,
     damage: battle.stats.damage,
     frags: battle.stats.frags,
     blocked: battle.stats.blocked,
+    pens,
+    ricochets: battle.stats.ricochets,
+    idle: battle.stats.idle,
     support: battle.stats.support,
     repairHp: battle.stats.repairHp,
     stayed,
@@ -705,6 +716,32 @@ export function settle(
     repairCost: repairBill(v.tier, u.hp, u.maxHp),
     hasSuccessor,
   })
+}
+
+/** Ход игрока без приказа: штраф и открытая позиция. */
+export function idleStep(battle: Battle, rng: () => number): Battle {
+  const next = structuredClone(battle)
+  if (next.over) return next
+  for (let i = 0; i < next.units.length; i++) {
+    const u = next.units[i]
+    if (!u.alive || !u.present) {
+      u.action = null
+      u.target = null
+      continue
+    }
+    if (u.player) {
+      punishIdle(next, i)
+      u.action = null
+      u.target = null
+      u.shell = null
+      continue
+    }
+    const ai = chooseAi(next, u, rng)
+    u.action = ai.kind
+    u.target = ai.target
+    u.shell = ai.shell
+  }
+  return resolveRound(next, rng)
 }
 
 export function shellOf(v: Vehicle, kind: ShellKind) {

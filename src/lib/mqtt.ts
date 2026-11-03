@@ -95,8 +95,9 @@ export class Mqtt {
   }
 
   pub(topic: string, text: string) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     const payload = cat(str(topic), new TextEncoder().encode(text))
-    this.ws?.send(pack(3, 0, payload))
+    this.ws.send(pack(3, 0, payload))
   }
 
   close() {

@@ -14,6 +14,12 @@ export interface Lobby {
   seats: LobbySeat[]
 }
 
+export interface ChatLine {
+  id: string
+  nick: string
+  text: string
+}
+
 export type ClientMsg =
   | { t: "create"; mode: Mode; vehicleId: string; gear: string[] }
   | { t: "join"; code: string; vehicleId: string; gear: string[] }
@@ -21,6 +27,7 @@ export type ClientMsg =
   | { t: "order"; order: Order }
   | { t: "back" }
   | { t: "leave" }
+  | ({ t: "say" } & ChatLine)
 
 export type ServerMsg =
   | ({ t: "lobby" } & Lobby)
@@ -28,3 +35,4 @@ export type ServerMsg =
   | { t: "wait" }
   | { t: "error"; text: string }
   | { t: "bye" }
+  | ({ t: "chat" } & ChatLine)

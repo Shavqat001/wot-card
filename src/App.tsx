@@ -11,10 +11,11 @@ import { shellPrice, type Reward } from "./lib/reward"
 import { COUNTRY_LABEL, dec, fmt, ROLE_LABEL, roman, SHELL_LABEL, TYPE_LABEL } from "./lib/text"
 import type { Battle, BattleStats, Country, FoeNote, Mode, Outcome, Role, VehType, Vehicle } from "./lib/types"
 import { byId, fork, gunArcText, successors, VEHICLES } from "./lib/vehicles"
-import type { Lobby } from "./lib/wire"
+import type { ChatLine, Lobby } from "./lib/wire"
 import { Auth } from "./ui/Auth"
+import { Chat } from "./ui/Chat"
 import { Chrome } from "./ui/Chrome"
-import { playBegin, startMusic, startTheme, stopMusic } from "./ui/sound"
+import { armClicks, playBegin, startMusic, startTheme, stopMusic } from "./ui/sound"
 import { BattleScreen } from "./ui/BattleScreen"
 import { DepotScreen } from "./ui/Depot"
 import { Dock, type Hub } from "./ui/Dock"
@@ -90,10 +91,14 @@ export default function App() {
   const [opening, setOpening] = useState<Battle | null>(null)
   const [lobby, setLobby] = useState<Lobby | null>(null)
   const [netErr, setNetErr] = useState<string | null>(null)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatUnread, setChatUnread] = useState(0)
   const screenRef = useRef(screen)
   const feed = useRef<((battle: Battle) => void) | null>(null)
   const fail = useRef<((text: string) => void) | null>(null)
+  const chatPush = useRef<(line: ChatLine) => void>(() => {})
   const net = useNet()
+  const inHub = (HUBS as readonly string[]).includes(screen)
   screenRef.current = screen
   net.handlers.current = {
     battle(next) {
@@ -120,7 +125,14 @@ export default function App() {
       setNetErr("комната закрыта")
       if (screenRef.current !== "hangar") setScreen("net")
     },
+    chat(line) {
+      chatPush.current(line)
+    },
   }
+
+  useEffect(() => {
+    armClicks()
+  }, [])
 
   useEffect(() => {
     const signed = Boolean(nick && save)
@@ -394,9 +406,26 @@ export default function App() {
           onHangar={() => setScreen("hangar")}
         />
       )}
-      {HUBS.includes(screen as Hub) && (
-        <Dock current={screen as Hub} onGo={(id) => setScreen(id)} />
+      {inHub && (
+        <Dock
+          current={screen as Hub}
+          onGo={(id) => { setChatOpen(false); setScreen(id) }}
+          chatOpen={chatOpen}
+          chatUnread={chatUnread}
+          onChat={() => setChatOpen((v) => !v)}
+        />
       )}
+      <Chat
+        nick={nick}
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        showToggle={!inHub}
+        lift={inHub}
+        top={screen === "battle"}
+        bind={chatPush}
+        onSend={(id, text) => net.send({ t: "say", id, nick, text })}
+        onUnread={setChatUnread}
+      />
     </div>
   )
 }
@@ -626,6 +655,7 @@ function Dossier({
           onChange={onGear}
           onBuy={onBuyGear}
           onScrap={onScrap}
+          readOnly
         />
       )}
       <p className="gunline">{v.gun} · {v.caliber} мм</p>

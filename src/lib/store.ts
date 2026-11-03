@@ -1,6 +1,6 @@
 import type { Database, SqlJsStatic } from "sql.js"
 import { catalogStale, seedCatalog } from "./catalog"
-import { emptyDepot, freshSave, loadSave, SAVE_KEY, type Save } from "./garage"
+import { emptyDepot, freshSave, loadSave, SAVE_KEY, STARTER_TANKS, type Save } from "./garage"
 import { cleanNick, nickError, nickKey } from "./nick"
 import type { ShellKind } from "./types"
 import schema from "./schema"
@@ -104,7 +104,7 @@ export function saveFromDb(base: Database, playerId = activeId): Save | null {
   }
   return {
     v: 2,
-    silver: Number(player.silver) || 0,
+    silver: Math.max(0, Number(player.silver) || 0),
     gold: Number(player.gold) || 0,
     bonds: Number(player.bonds) || 0,
     freeXp: Number(player.free_xp) || 0,
@@ -121,7 +121,7 @@ export function writeSave(base: Database, save: Save, playerId = activeId) {
   try {
     base.run(
       "INSERT OR REPLACE INTO player (id, silver, gold, bonds, free_xp, selected) VALUES (?, ?, ?, ?, ?, ?)",
-      [playerId, save.silver, save.gold, save.bonds, save.freeXp, save.selected],
+      [playerId, Math.max(0, save.silver), save.gold, save.bonds, save.freeXp, save.selected],
     )
     base.run("DELETE FROM garage WHERE player_id = ?", [playerId])
     const tank = base.prepare("INSERT INTO garage (player_id, vehicle_id, xp) VALUES (?, ?, ?)")
@@ -283,16 +283,16 @@ function onHost(): boolean {
   return typeof location !== "undefined" && Boolean(location.host)
 }
 
-async function postAuth(kind: "register" | "login", body: Record<string, string>): Promise<{ ok: true; id: string; nick: string } | AuthFail> {
+async function postAuth(kind: "register" | "login", body: Record<string, string>): Promise<{ ok: true; id: string; nick: string; first: boolean } | AuthFail> {
   try {
     const res = await fetch(`/api/${kind}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     })
-    const data = await res.json() as { ok?: unknown; id?: unknown; nick?: unknown; error?: unknown }
+    const data = await res.json() as { ok?: unknown; id?: unknown; nick?: unknown; error?: unknown; first?: unknown }
     if (data?.ok === true && typeof data.id === "string" && typeof data.nick === "string") {
-      return { ok: true, id: data.id, nick: data.nick }
+      return { ok: true, id: data.id, nick: data.nick, first: data.first === true }
     }
     if (data?.ok === false && typeof data.error === "string") return { ok: false, error: data.error }
     return { ok: false, error: "сбой" }
@@ -353,7 +353,11 @@ const GIFT_TANKS = ["t34", "kv1", "sherman"]
 
 export function grantAlvares(save: Save, nick: string): Save {
   if (nickKey(nick) !== GIFT_NICK) return save
-  if (save.owned.length <= GIFT_TANKS.length) return save
+  if (
+    save.silver === 100000
+    && save.owned.length === GIFT_TANKS.length
+    && GIFT_TANKS.every((id) => save.owned.includes(id))
+  ) return save
   const owned = [...GIFT_TANKS]
   const xp: Record<string, number> = {}
   const gear: Record<string, string[]> = {}
@@ -373,9 +377,64 @@ export function grantAlvares(save: Save, nick: string): Save {
   }
 }
 
+const STARTER_KEY = "angar.starter"
+
+function starterSeen(id: string): boolean {
+  if (typeof localStorage === "undefined") return false
+  try {
+    const raw = JSON.parse(localStorage.getItem(STARTER_KEY) ?? "[]") as unknown
+    return Array.isArray(raw) && raw.includes(id)
+  } catch {
+    return false
+  }
+}
+
+function rememberStarter(id: string) {
+  if (typeof localStorage === "undefined") return
+  try {
+    const raw = JSON.parse(localStorage.getItem(STARTER_KEY) ?? "[]") as unknown
+    const ids = Array.isArray(raw) ? raw.filter((item) => typeof item === "string") : []
+    if (!ids.includes(id)) ids.push(id)
+    localStorage.setItem(STARTER_KEY, JSON.stringify(ids))
+  } catch {
+    /* нет хранилища */
+  }
+}
+
+function trimFatPark(save: Save): Save {
+  if (save.owned.length < 20) return save
+  if (Object.values(save.xp).some((v) => v > 0)) return save
+  return {
+    ...save,
+    owned: [...STARTER_TANKS],
+    selected: STARTER_TANKS.includes(save.selected as typeof STARTER_TANKS[number])
+      ? save.selected
+      : STARTER_TANKS[0],
+    gear: {},
+  }
+}
+
+/** 250 000 серебра, 15 000 свободного опыта и три танка III уровня. */
+function grantStarter(save: Save, id: string): Save {
+  if (starterSeen(id)) return trimFatPark(save)
+  rememberStarter(id)
+  if (save.silver !== 24000 || save.freeXp !== 0 || save.gold !== 0 || save.bonds !== 0) {
+    return trimFatPark(save)
+  }
+  return {
+    ...save,
+    silver: 250000,
+    freeXp: 15000,
+    owned: [...STARTER_TANKS],
+    selected: STARTER_TANKS[0],
+    xp: {},
+    gear: {},
+  }
+}
+
 function enterWithGift(id: string, nick: string): AuthOk {
   const loaded = loadOrSeed(db!, id)
-  const save = grantAlvares(loaded.save, nick)
+  const save = grantAlvares(grantStarter(loaded.save, id), nick)
   if (save !== loaded.save) writeSave(db!, save, id)
   lastSnap = snapOf(save)
   void persist()
@@ -455,7 +514,7 @@ export async function bootStore(): Promise<{ save: Save | null; nick: string | n
     if (nick) {
       activeId = sid.id
       const loaded = loadOrSeed(db, sid.id)
-      const save = grantAlvares(loaded.save, nick)
+      const save = grantAlvares(grantStarter(loaded.save, sid.id), nick)
       if (save !== loaded.save) writeSave(db, save, sid.id)
       lastSnap = snapOf(save)
       await flushPersist()

@@ -114,6 +114,10 @@ export interface BattleStats {
   damage: DmgGroup[]
   frags: FragNote[]
   blocked: number
+  /** Сколько раз снаряд срикошетил от этой машины. */
+  ricochets: number
+  /** Сколько раундов простояли без приказа. */
+  idle: number
   support: SupportNote[]
   repairHp: number
   shells: Record<ShellKind, number>

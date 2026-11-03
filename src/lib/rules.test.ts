@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { chooseAi } from "./ai"
 import { actionError, createBattle, resolveRound, step } from "./battle"
 import { fit, gearHint, gearById } from "./gear"
-import { buy, buyGear, buyGold, freshSave, goldToSilver, goldToXp, loadSave, scrapGear, setGear } from "./garage"
+import { applyReward, buy, buyGear, buyGold, freshSave, goldToSilver, goldToXp, loadSave, scrapGear, setGear } from "./garage"
 import { mulberry32 } from "./rng"
 import {
   damageXp,
@@ -126,22 +126,16 @@ describe("зарядка", () => {
     expect(gunWord(10, 18.5)).toBe("ещё удар")
   })
 
-  it("быстрый с ближней сразу на дальнюю, медленный на шаг", () => {
+  it("ромб 45° оставляет дистанцию и ставит борт под углом", () => {
     expect(retreatTo(0, 72)).toBe(2)
-    expect(retreatTo(0, 34)).toBe(1)
-    expect(retreatTo(1, 34)).toBe(2)
     const light = createBattle("bt7", "duel", () => 0.4)
     const li = light.playerIndex
     light.units[li].distance = 0
     light.units[li].action = "retreat"
     const far = resolveRound(light, () => 0)
-    expect(far.units[li].distance).toBe(2)
+    expect(far.units[li].distance).toBe(0)
     expect(far.units[li].present).toBe(true)
-    const heavy = createBattle("kv1", "duel", () => 0.4)
-    const hi = heavy.playerIndex
-    heavy.units[hi].distance = 0
-    heavy.units[hi].action = "retreat"
-    expect(resolveRound(heavy, () => 0).units[hi].distance).toBe(1)
+    expect(far.units[li].action).toBe("retreat")
   })
 })
 
@@ -212,11 +206,11 @@ describe("раунд", () => {
 })
 
 describe("ИИ", () => {
-  it("раненый быстрый уходит, пустой тяжёлый ставит ромб, пустая ПТ защищается, САУ берёт фугас", () => {
+  it("раненый ставит ромб, пустой тяжёлый — броню, пустая ПТ защищается, САУ берёт фугас", () => {
     const light = createBattle("bt7", "duel", () => 0.5)
     const scout = light.units[light.playerIndex]
     scout.hp = 10
-    expect(chooseAi(light, scout, () => 0.9).kind).toBe("retreat")
+    expect(chooseAi(light, scout, () => 0.4).kind).toBe("retreat")
 
     const heavy = createBattle("kv1", "duel", () => 0.5)
     const ht = heavy.units[heavy.playerIndex]
@@ -260,6 +254,9 @@ describe("опыт и кредиты", () => {
       ],
       frags: [{ name: pz.name, tier: pz.tier }],
       blocked: 270,
+      pens: 0,
+      ricochets: 0,
+      idle: 0,
       support: [{ allyTier: 5, targetTier: 5, targetHp: 1190, amount: 160 }],
       repairHp: 90,
       stayed: true,
@@ -272,13 +269,33 @@ describe("опыт и кредиты", () => {
     expect(reward.xp).toBe(833)
     expect(reward.onVehicle).toBe(791)
     expect(reward.freeXp).toBe(42)
-    expect(reward.credits).toBe(8332 - 10 * 800 - 3500)
+    expect(reward.credits).toBe(60000 + 270 * 15)
     expect(reward.xpLines.map((line) => line.value)).toEqual([235, 90, 84, 50, 28, 18, 50, 278])
-    expect(reward.creditLines.map((line) => line.label)).toEqual([
-      "начислено",
-      "пополнение · ББ × 10",
-      "ремонт",
+    expect(reward.creditLines).toEqual([
+      { label: "победа", value: 60000 },
+      { label: "блок", value: 4050 },
     ])
+    const loss = rewardOf({
+      shooterTier: t34.tier,
+      ownHp: t34.hp,
+      damage: [],
+      frags: [],
+      blocked: 0,
+      pens: 0,
+      ricochets: 0,
+      idle: 0,
+      support: [],
+      repairHp: 0,
+      stayed: true,
+      left: false,
+      outcome: "loss",
+      shells: { ap: 30, apcr: 0, he: 0 },
+      repairCost: 7000,
+      hasSuccessor: true,
+    })
+    expect(loss.credits).toBe(20000)
+    const broke = applyReward({ ...freshSave(), silver: 10 }, "t34", { onVehicle: 0, freeXp: 0, credits: -40 })
+    expect(broke.silver).toBe(0)
   })
 
   it("БП вчетверо дороже ББ, ОФ вдвое", () => {
@@ -298,10 +315,11 @@ describe("опыт и кредиты", () => {
     expect(repairBill(2, 0, 200)).toBe(800)
   })
 
-  it("у дополнительных машин есть запасная картинка", () => {
-    expect(artId("su18")).toBe("su122")
-    expect(artId("kv1s")).toBe("kv1")
+  it("у машины без своего файла берётся портрет ветки", () => {
     expect(artId("t34")).toBe("t34")
+    expect(artId("su18")).toBe("su18")
+    expect(artId("centauro")).not.toBe("centauro")
+    expect(artId("skodat15")).not.toBe("skodat15")
   })
 })
 
@@ -313,30 +331,27 @@ describe("ангар", () => {
     expect(loadSave(null).save.bonds).toBe(0)
     expect(loadSave("{").rebuilt).toBe(true)
     expect(loadSave("{").save.owned).toEqual(freshSave().owned)
-    expect(freshSave().owned.length).toBeGreaterThan(40)
-    expect(freshSave().owned.every((id) => ["ussr", "germany", "usa"].includes(byId(id).country))).toBe(true)
+    expect(freshSave().owned).toEqual(["t46", "pz2", "m3st"])
+    expect(freshSave().owned.every((id) => byId(id).tier === 3)).toBe(true)
     expect(freshSave().owned).not.toContain("is3")
     const kept = loadSave(JSON.stringify({ v: 1, credits: 10, freeXp: 0, owned: ["t34"], xp: {}, selected: "t34" }))
     expect(kept.rebuilt).toBe(false)
     expect(kept.save.silver).toBe(10)
     expect(kept.save.gold).toBe(0)
     expect(kept.save.bonds).toBe(0)
-    expect(kept.save.owned).toContain("tiger")
+    expect(kept.save.owned).toEqual(["t34"])
   })
 
   it("опыт Т-34 открывает Т-34-85 вместе с кредитами", () => {
-    const save = freshSave()
-    save.owned = save.owned.filter((id) => id !== "t3485")
-    save.xp.t34 = 2400
-    save.silver = 50000
+    const save = { ...freshSave(), owned: ["t34"], selected: "t34", xp: { t34: 2400 }, silver: 50000 }
     const next = buy(save, "t3485")
     expect(next?.owned).toContain("t3485")
     expect(next?.xp.t34).toBe(0)
     expect(next?.silver).toBe(32000)
-    const poor = freshSave()
-    poor.owned = ["t34"]
-    poor.silver = 0
+    const poor = { ...freshSave(), owned: ["t34"], selected: "t34", silver: 0 }
     expect(buy(poor, "t3485")).toBeNull()
+    const skip = { ...freshSave(), owned: ["t34"], selected: "t34", xp: { t34: 99999 }, silver: 999999 }
+    expect(buy(skip, "t43")).toBeNull()
   })
 
   it("ветки целые, стартовые три", () => {
@@ -366,8 +381,9 @@ describe("ангар", () => {
     expect(fit(base, ["harden"]).hp).toBe(Math.round(base.hp * 1.08))
     const battle = createBattle("t34", "duel", () => 0.4, ["harden"])
     expect(battle.units[battle.playerIndex].maxHp).toBe(Math.round(base.hp * 1.08))
-    const bought = buyGear(freshSave(), "rammer")!
-    expect(bought.silver).toBe(freshSave().silver - gearById("rammer")!.cost)
+    const rich = { ...freshSave(), owned: ["t34", ...freshSave().owned], selected: "t34", silver: 50000 }
+    const bought = buyGear(rich, "rammer")!
+    expect(bought.silver).toBe(50000 - gearById("rammer")!.cost)
     expect(bought.depot.gear.rammer).toBe(1)
     let save = setGear(bought, "t34", 0, "rammer")
     expect(save.gear.t34[0]).toBe("rammer")

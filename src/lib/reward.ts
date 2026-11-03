@@ -1,5 +1,17 @@
-import { SHELL_LABEL } from "./text"
 import type { Outcome, ShellKind } from "./types"
+
+/** Сколько серебра приносит бой, уже после ремонта и снарядов. */
+export const BATTLE_SILVER: Record<Outcome, number> = {
+  win: 60000,
+  loss: 20000,
+  draw: 40000,
+}
+
+/** Бонусы к серебру за бой. */
+export const PEN_SILVER = 4000
+export const BLOCK_SILVER = 15
+export const RICOCHET_SILVER = 2500
+export const IDLE_FINE = 10000
 
 /** Полный ремонт по уровню. Цены 9–10 заложены заранее. */
 export const FULL_REPAIR: Record<number, number> = {
@@ -58,6 +70,9 @@ export interface RewardInput {
   damage: { name: string; tier: number; hp: number; amount: number }[]
   frags: { name: string; tier: number }[]
   blocked: number
+  pens: number
+  ricochets: number
+  idle: number
   support: { allyTier: number; targetTier: number; targetHp: number; amount: number }[]
   repairHp: number
   stayed: boolean
@@ -133,12 +148,6 @@ function outcomeXp(pre: number, outcome: Outcome): number {
   return Math.max(0, Math.round(pre))
 }
 
-function outcomeCredits(gross: number, outcome: Outcome): number {
-  if (outcome === "win") return Math.round(gross * 12 / 10)
-  if (outcome === "loss") return Math.round(gross * 85 / 100)
-  return Math.round(gross)
-}
-
 export function rewardOf(input: RewardInput): Reward {
   const xpLines: XpLine[] = []
   let pre = 0
@@ -170,11 +179,9 @@ export function rewardOf(input: RewardInput): Reward {
     else supportGroups.set(key, { ...s })
   }
   let supportXp = 0
-  let supportDamage = 0
   for (const s of supportGroups.values()) {
     const dx = damageXp(s.amount, s.targetHp, s.targetTier, s.allyTier)
     supportXp += Math.round(0.55 * dx)
-    supportDamage += s.amount
   }
   if (supportXp !== 0) {
     xpLines.push({ label: "поддержка", value: supportXp })
@@ -203,28 +210,30 @@ export function rewardOf(input: RewardInput): Reward {
   const freeXp = input.hasSuccessor ? Math.round(xp * 0.05) : xp
   const onVehicle = xp - freeXp
 
-  const damageSum = input.damage.reduce((s, d) => s + d.amount, 0)
-  const fragCredits = input.frags.reduce((s, f) => s + 700 * f.tier, 0)
-  const grossRaw = damageSum * (260 + 42 * input.shooterTier) / 100
-    + fragCredits
-    + input.blocked * 3 / 10
-    + supportDamage * 45 / 100
-  const gross = outcomeCredits(grossRaw, input.outcome)
-  const ammo = shellCost(input.shells, input.shooterTier)
-  const credits = gross - ammo - input.repairCost
-  const creditLines: CreditLine[] = [{ label: "начислено", value: gross }]
-  const kinds: ShellKind[] = ["ap", "apcr", "he"]
-  for (const kind of kinds) {
-    const stock = input.depotShells?.[kind] ?? 0
-    if (stock) creditLines.push({ label: `склад · ${SHELL_LABEL[kind]} × ${stock}`, value: 0 })
-    const n = input.shells[kind]
-    if (!n) continue
-    creditLines.push({
-      label: `пополнение · ${SHELL_LABEL[kind]} × ${n}`,
-      value: -(n * shellPrice(kind, input.shooterTier)),
-    })
+  const base = BATTLE_SILVER[input.outcome] ?? BATTLE_SILVER.draw
+  const creditLabel = input.outcome === "win" ? "победа" : input.outcome === "loss" ? "поражение" : "ничья"
+  const creditLines: CreditLine[] = [{ label: creditLabel, value: base }]
+  let credits = base
+  if (input.pens > 0) {
+    const value = input.pens * PEN_SILVER
+    creditLines.push({ label: `пробитие × ${input.pens}`, value })
+    credits += value
   }
-  creditLines.push({ label: "ремонт", value: -input.repairCost })
+  if (input.blocked > 0) {
+    const value = Math.round(input.blocked * BLOCK_SILVER)
+    creditLines.push({ label: "блок", value })
+    credits += value
+  }
+  if (input.ricochets > 0) {
+    const value = input.ricochets * RICOCHET_SILVER
+    creditLines.push({ label: `рикошет × ${input.ricochets}`, value })
+    credits += value
+  }
+  if (input.idle > 0) {
+    const value = -(input.idle * IDLE_FINE)
+    creditLines.push({ label: `простой × ${input.idle}`, value })
+    credits += value
+  }
   return { xp, onVehicle, freeXp, credits, xpLines, creditLines }
 }
 

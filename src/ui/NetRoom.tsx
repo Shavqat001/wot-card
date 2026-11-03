@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { MODE_HINT, MODE_NAME, MODE_SIZE } from "../lib/modes"
+import { MODE_HINT, MODE_NAME } from "../lib/modes"
 import type { Mode, Vehicle } from "../lib/types"
 import type { Lobby } from "../lib/wire"
 

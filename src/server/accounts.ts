@@ -6,7 +6,7 @@ import type { Database } from "sql.js"
 import { cleanNick, nickError, nickKey } from "../lib/nick"
 import { openMemory, setWasmFile } from "../lib/store"
 
-export type AuthOk = { ok: true; id: string; nick: string }
+export type AuthOk = { ok: true; id: string; nick: string; first: boolean }
 export type AuthFail = { ok: false; error: string }
 
 let file = join(process.cwd(), "data", "host.sqlite")
@@ -45,6 +45,14 @@ function rows(base: Database) {
   }
   stmt.free()
   return out
+}
+
+function oldestId(): string | null {
+  if (!db) return null
+  const stmt = db.prepare("SELECT id FROM account ORDER BY created_at ASC LIMIT 1")
+  const id = stmt.step() ? String(stmt.getAsObject().id) : null
+  stmt.free()
+  return id
 }
 
 function byNick(nick: string) {
@@ -94,11 +102,12 @@ export function registerAccount(nickRaw: unknown, pass: unknown, again: unknown)
   if (pass.length < 4) return { ok: false, error: "короткий пароль" }
   if (pass !== again) return { ok: false, error: "пароли не сошлись" }
   if (byNick(nick)) return { ok: false, error: "ник занят" }
+  const first = oldestId() === null
   const id = uid()
   const salt = uid() + uid()
   db.run("INSERT INTO account (id, nick, salt, pass, created_at) VALUES (?, ?, ?, ?, ?)", [id, nick, salt, digest(pass, salt), Date.now()])
   persist()
-  return { ok: true, id, nick }
+  return { ok: true, id, nick, first }
 }
 
 export function loginAccount(nickRaw: unknown, pass: unknown): AuthOk | AuthFail {
@@ -108,5 +117,5 @@ export function loginAccount(nickRaw: unknown, pass: unknown): AuthOk | AuthFail
   const found = byNick(nick)
   if (!found) return { ok: false, error: "нет такого" }
   if (digest(pass, found.salt) !== found.pass) return { ok: false, error: "неверный пароль" }
-  return { ok: true, id: found.id, nick: found.nick }
+  return { ok: true, id: found.id, nick: found.nick, first: found.id === oldestId() }
 }

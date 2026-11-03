@@ -23,6 +23,7 @@ export function GearBar({
   onChange,
   onBuy,
   onScrap,
+  readOnly = false,
 }: {
   ids: string[]
   stock: Record<string, number>
@@ -30,6 +31,7 @@ export function GearBar({
   onChange: (index: number, id: string | null) => void
   onBuy: (index: number, id: string) => void
   onScrap: (index: number) => void
+  readOnly?: boolean
 }) {
   const [open, setOpen] = useState(() => localStorage.getItem(KEY) !== "0")
   const [menu, setMenu] = useState<{ i: number; x: number; y: number } | null>(null)
@@ -64,6 +66,23 @@ export function GearBar({
   }, [menu])
 
   const held = menu ? slots[menu.i] : null
+
+  if (readOnly) {
+    return (
+      <div className="gear">
+        <p className="gearhead">на машине</p>
+        <div className="slots">
+          {slots.map((g, i) => (
+            <div key={i} className={g ? "slot on" : "slot"} aria-label={g ? g.name : "пусто"}>
+              {g ? <img src={`${import.meta.env.BASE_URL}gear/${g.id}.png`} alt="" /> : null}
+              <small>{g ? g.name : "пусто"}</small>
+              {g && <em>{gearHint(g).join(" · ")}</em>}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="gear">

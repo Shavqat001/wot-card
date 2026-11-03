@@ -1,22 +1,23 @@
 const base = import.meta.env.BASE_URL
 
 const POOLS: Record<string, string[]> = {
-  begin: ["battle_begin.MP3"],
-  pompom: ["wot_pompom.mp3", "small_shot.mp3", "small_shot2.mp3"],
-  mid: ["shot.mp3", "shot2.mp3", "shot3.mp3"],
-  midsnipe: ["shot.mp3", "shot2.mp3", "shot3.mp3"],
-  big: ["big_shot.mp3", "big_shot2.mp3"],
-  bigsnipe: ["big_shot.mp3", "big_shot2.mp3"],
-  boom: ["babaha.mp3", "big_shot2.mp3"],
-  pen: ["penetration.mp3", "penetration2.mp3"],
-  nopen: ["didnt-break-through.mp3", "didnt-break-through2.mp3"],
-  ricochet: ["rikoshet.mp3"],
-  splash: ["babaha.mp3"],
-  kill: ["tank-destroyed.mp3"],
+  begin: ["cues/battle_begin.MP3"],
+  pompom: ["shots/wot_pompom.mp3", "shots/small_shot.mp3", "shots/small_shot2.mp3"],
+  mid: ["shots/shot.mp3", "shots/shot2.mp3", "shots/shot3.mp3"],
+  midsnipe: ["shots/shot.mp3", "shots/shot2.mp3", "shots/shot3.mp3"],
+  big: ["shots/big_shot.mp3", "shots/big_shot2.mp3"],
+  bigsnipe: ["shots/big_shot.mp3", "shots/big_shot2.mp3"],
+  boom: ["shots/babaha.mp3", "shots/big_shot2.mp3"],
+  pen: ["hits/penetration.mp3", "hits/penetration2.mp3"],
+  nopen: ["hits/didnt-break-through.mp3", "hits/didnt-break-through2.mp3"],
+  ricochet: ["hits/rikoshet.mp3"],
+  splash: ["shots/babaha.mp3"],
+  kill: ["hits/tank-destroyed.mp3"],
+  click: ["clicks/click.wav", "clicks/click2.wav", "clicks/click3.wav", "clicks/click4.wav"],
 }
 
-const MUSIC = "bg.mp3"
-const THEME = "Main_Theme.mp3"
+const MUSIC = "music/battle-music1.mp3"
+const THEME = "music/Main_Theme.mp3"
 const PREF_KEY = "angar.opt"
 
 const cache = new Map<string, HTMLAudioElement>()
@@ -197,8 +198,29 @@ export function playBegin() {
   playPool("begin", 0.78)
 }
 
-export function playShot(caliber: number, sniper = false, arty = false) {
-  playPool(shotKey(caliber, sniper, arty), 0.48)
+export function playShot(caliber: number, sniper = false, arty = false, volume = 0.48) {
+  playPool(shotKey(caliber, sniper, arty), volume)
+}
+
+let clicksArmed = false
+
+export function playClick() {
+  playPool("click", 0.42)
+}
+
+/** Случайный клик из public/sounds/clicks на кнопках и прочих нажимаемых элементах. */
+export function armClicks() {
+  if (clicksArmed || typeof document === "undefined") return
+  clicksArmed = true
+  document.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return
+    const node = e.target instanceof Element ? e.target : null
+    const el = node?.closest("button, a, label, select, summary, input, textarea, [role='button']")
+    if (!el) return
+    if ((el instanceof HTMLButtonElement || el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && el.disabled) return
+    if (el.getAttribute("aria-disabled") === "true") return
+    playClick()
+  }, true)
 }
 
 export function playHit(verb: string, killed: boolean) {

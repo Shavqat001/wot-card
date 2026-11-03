@@ -20,7 +20,7 @@ describe("sqlite", () => {
     expect(hp).toBe(820)
     const shells = db.exec("SELECT COUNT(*) FROM vehicle_shell WHERE vehicle_id = 't34'")[0].values[0][0]
     expect(shells).toBe(3)
-    let save = buyGear(freshSave(), "rammer")!
+    let save = buyGear({ ...freshSave(), owned: ["t34", ...freshSave().owned], selected: "t34" }, "rammer")!
     save = setGear(save, "t34", 0, "rammer")
     save = { ...save, silver: 18000, gold: 250, bonds: 12, freeXp: 40 }
     writeSave(db, save)
@@ -46,7 +46,7 @@ describe("alvares", () => {
     expect(save.gold).toBe(100)
     expect(save.bonds).toBe(500)
     expect(grantAlvares(save, "ALVARES")).toBe(save)
-    expect(grantAlvares(freshSave(), "Сталь").owned.length).toBeGreaterThan(3)
+    expect(grantAlvares(freshSave(), "Сталь").owned).toEqual(["t46", "pz2", "m3st"])
   })
 })
 
@@ -56,6 +56,9 @@ describe("account", () => {
     const first = await registerAccount("Сталь", "pass1", "pass1")
     expect(first.ok).toBe(true)
     if (!first.ok) return
+    expect(first.save.silver).toBe(250000)
+    expect(first.save.freeXp).toBe(15000)
+    expect(first.save.owned).toEqual(["t46", "pz2", "m3st"])
     await putSave({ ...first.save, silver: 9100 })
     await logoutAccount()
     const taken = await registerAccount("сталь", "pass2", "pass2")
@@ -63,7 +66,9 @@ describe("account", () => {
     const second = await registerAccount("Тень", "pass2", "pass2")
     expect(second.ok).toBe(true)
     if (!second.ok) return
-    expect(second.save.silver).toBe(24000)
+    expect(second.save.silver).toBe(250000)
+    expect(second.save.freeXp).toBe(15000)
+    expect(second.save.owned).toEqual(["t46", "pz2", "m3st"])
     await logoutAccount()
     const bad = await loginAccount("Сталь", "pass2")
     expect(bad.ok).toBe(false)
