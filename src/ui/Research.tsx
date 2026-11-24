@@ -1,73 +1,34 @@
-import { useMemo, useRef, useState, type PointerEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react"
 import { canBuy, type Save } from "../lib/garage"
-import { COUNTRIES, roman, TECH_TITLE } from "../lib/text"
-import type { Country, VehType, Vehicle } from "../lib/types"
+import { COUNTRIES, fmt, roman, TECH_TITLE } from "../lib/text"
+import type { Country, Vehicle } from "../lib/types"
+import { GERMANY_ROW } from "../lib/germanyTree"
+import { USA_ROW } from "../lib/usaTree"
+import { USSR_ROW } from "../lib/ussrTree"
 import { VEHICLES } from "../lib/vehicles"
 import { TankArt } from "./TankArt"
-const TYPE_RANK: Record<VehType, number> = { spg: 0, td: 1, heavy: 2, medium: 3, light: 4 }
+
 const TIERS = 10
 const CELL_W = 92
 const CELL_H = 68
 const GAP_X = 18
 const GAP_Y = 8
 
+const ROW: Partial<Record<Country, Record<string, number>>> = {
+  ussr: USSR_ROW,
+  germany: GERMANY_ROW,
+  usa: USA_ROW,
+}
+
 type Spot = { v: Vehicle; col: number; row: number }
 
-const LAYOUT = new Map<Country, Spot[]>()
-
+/** Нации по скринам клиента. Остальные пока пустые. */
 function layout(country: Country): Spot[] {
-  const hit = LAYOUT.get(country)
-  if (hit) return hit
-  const tanks = VEHICLES.filter((v) => v.country === country)
-  const local = new Map(tanks.map((v) => [v.id, v]))
-  const kids = new Map<string, Vehicle[]>()
-  for (const v of tanks) {
-    if (!v.pred || !local.has(v.pred)) continue
-    const list = kids.get(v.pred) ?? []
-    list.push(v)
-    kids.set(v.pred, list)
-  }
-  const span = new Map<string, number>()
-  const deep = new Map<string, number>()
-  const measure = (v: Vehicle): number => {
-    const ch = kids.get(v.id) ?? []
-    if (!ch.length) {
-      span.set(v.id, 1)
-      deep.set(v.id, v.tier)
-      return 1
-    }
-    const total = ch.reduce((n, c) => n + measure(c), 0)
-    span.set(v.id, total)
-    deep.set(v.id, Math.max(v.tier, ...ch.map((c) => deep.get(c.id) ?? c.tier)))
-    return total
-  }
-  const roots = tanks
-    .filter((v) => !v.pred || !local.has(v.pred))
-    .sort((a, b) => TYPE_RANK[a.type] - TYPE_RANK[b.type] || a.tier - b.tier || a.name.localeCompare(b.name, "ru"))
-  roots.forEach(measure)
-  for (const list of kids.values()) {
-    list.sort((a, b) =>
-      (deep.get(b.id) ?? b.tier) - (deep.get(a.id) ?? a.tier)
-      || (span.get(b.id) ?? 1) - (span.get(a.id) ?? 1)
-      || a.name.localeCompare(b.name, "ru"))
-  }
-  const rowOf = new Map<string, number>()
-  const place = (v: Vehicle, row: number) => {
-    rowOf.set(v.id, row)
-    let next = row
-    for (const child of kids.get(v.id) ?? []) {
-      place(child, next)
-      next += span.get(child.id) ?? 1
-    }
-  }
-  let row = 1
-  for (const root of roots) {
-    place(root, row)
-    row += span.get(root.id) ?? 1
-  }
-  const spots = tanks.map((v) => ({ v, col: v.tier, row: rowOf.get(v.id) ?? 1 }))
-  LAYOUT.set(country, spots)
-  return spots
+  const rows = ROW[country]
+  if (!rows) return []
+  return VEHICLES
+    .filter((v) => v.country === country && rows[v.id] != null)
+    .map((v) => ({ v, col: v.tier, row: rows[v.id] }))
 }
 
 function Flag({ country, on, onPick }: { country: Country; on: boolean; onPick: () => void }) {
@@ -103,13 +64,19 @@ export function Research({
     top: number
     moved: boolean
   } | null>(null)
-  const skipClick = useRef(false)
   const spots = useMemo(() => layout(nation), [nation])
   const byId = useMemo(() => new Map(spots.map((s) => [s.v.id, s])), [spots])
   const have = useMemo(() => new Set(save.owned), [save.owned])
-  const rows = Math.max(1, ...spots.map((s) => s.row))
+  const rows = spots.length ? Math.max(...spots.map((s) => s.row)) : 0
   const width = TIERS * CELL_W + (TIERS - 1) * GAP_X
-  const height = rows * CELL_H + (rows - 1) * GAP_Y
+  const height = rows > 0 ? rows * CELL_H + (rows - 1) * GAP_Y : 120
+
+  useEffect(() => {
+    const box = canvasRef.current
+    if (!box) return
+    box.scrollTop = 0
+    box.scrollLeft = 0
+  }, [nation])
 
   function point(spot: Spot, edge: "left" | "right" | "mid") {
     const x0 = (spot.col - 1) * (CELL_W + GAP_X)
@@ -122,7 +89,8 @@ export function Research({
     if (e.button !== 0) return
     const box = canvasRef.current
     if (!box) return
-    skipClick.current = false
+    /* тап по карточке — досье, без панорамирования */
+    if ((e.target as Element | null)?.closest?.("button.node")) return
     pan.current = {
       id: e.pointerId,
       x: e.clientX,
@@ -144,9 +112,8 @@ export function Research({
     if (!box || !hold || e.pointerId !== hold.id) return
     const dx = e.clientX - hold.x
     const dy = e.clientY - hold.y
-    if (!hold.moved && dx * dx + dy * dy < 64) return
+    if (!hold.moved && dx * dx + dy * dy < 196) return
     hold.moved = true
-    skipClick.current = true
     box.classList.add("grabbing")
     box.scrollLeft = hold.left - dx
     box.scrollTop = hold.top - dy
@@ -160,23 +127,28 @@ export function Research({
   }
 
   function openTank(id: string) {
-    if (skipClick.current) {
-      skipClick.current = false
-      return
-    }
     onOpen(id)
   }
 
-  const wires = useMemo(() => spots.flatMap((spot) => {
-    if (!spot.v.pred) return []
-    const from = byId.get(spot.v.pred)
-    if (!from) return []
-    const a = point(from, "right")
-    const b = point(spot, "left")
-    if (Math.abs(a.y - b.y) < 1) return [`M ${a.x} ${a.y} H ${b.x}`]
-    const mid = a.x + (b.x - a.x) * 0.45
-    return [`M ${a.x} ${a.y} H ${mid} V ${b.y} H ${b.x}`]
-  }), [spots, byId])
+  const wires = useMemo(() => {
+    const out: { d: string; key: string; lit: boolean }[] = []
+    for (const spot of spots) {
+      if (!spot.v.pred) continue
+      const from = byId.get(spot.v.pred)
+      if (!from) continue
+      const a = point(from, "right")
+      const b = point(spot, "left")
+      const lit = have.has(from.v.id)
+      let d: string
+      if (Math.abs(a.y - b.y) < 1) d = `M ${a.x} ${a.y} H ${b.x}`
+      else {
+        const mid = a.x + (b.x - a.x) * 0.45
+        d = `M ${a.x} ${a.y} H ${mid} V ${b.y} H ${b.x}`
+      }
+      out.push({ d, key: `${from.v.id}-${spot.v.id}`, lit })
+    }
+    return out
+  }, [spots, byId, have])
 
   return (
     <main className="sheet study">
@@ -213,24 +185,32 @@ export function Research({
                 width,
                 height,
                 gridTemplateColumns: `repeat(${TIERS}, ${CELL_W}px)`,
-                gridTemplateRows: `repeat(${rows}, ${CELL_H}px)`,
+                gridTemplateRows: rows > 0 ? `repeat(${rows}, ${CELL_H}px)` : undefined,
                 columnGap: GAP_X,
                 rowGap: GAP_Y,
               }}
             >
+              {spots.length === 0 && (
+                <p className="empty tree-empty">дерево пусто — жду скрин ветки</p>
+              )}
               <svg className="wires" width={width} height={height} aria-hidden>
-                {wires.map((d) => (
-                  <path key={d} d={d} />
+                {wires.map((w) => (
+                  <path key={w.key} d={w.d} className={w.lit ? "lit" : ""} />
                 ))}
               </svg>
               {spots.map((spot) => {
                 const owned = have.has(spot.v.id)
                 const ready = !owned && canBuy(save, spot.v.id, have)
+                const locked = !owned && !ready
                 return (
                   <button
                     key={spot.v.id}
                     type="button"
-                    className={`node c-${spot.v.country}${owned ? " have" : ready ? " ready" : ""}`}
+                    className={[
+                      "node",
+                      `c-${spot.v.country}`,
+                      owned ? "have" : ready ? "ready" : "locked",
+                    ].join(" ")}
                     style={{
                       gridColumn: spot.col,
                       gridRow: spot.row,
@@ -240,6 +220,14 @@ export function Research({
                     <i className="mark">{roman(spot.v.tier)}</i>
                     <TankArt id={spot.v.id} size="sm" />
                     <b>{spot.v.name}</b>
+                    {owned ? (
+                      <em className="got">✓</em>
+                    ) : (
+                      <em className={locked ? "xp dim" : "xp"}>
+                        {spot.v.xp > 0 ? fmt(spot.v.xp) : "—"}
+                        <span>★</span>
+                      </em>
+                    )}
                   </button>
                 )
               })}

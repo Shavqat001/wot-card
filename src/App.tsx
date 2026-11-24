@@ -5,12 +5,12 @@ import {
   applyReward, buy, buyGear, buyGold, buyShells, canBuy, goldToSilver, goldToXp,
   hasOpenSuccessor, scrapDepotGear, scrapGear, setGear, spendShells, type Save,
 } from "./lib/garage"
-import { bootStore, grantAlvares, logoutAccount, putSave } from "./lib/store"
+import { bootStore, logoutAccount, putSave } from "./lib/store"
 import { MODE_NAME, MODE_SIZE } from "./lib/modes"
 import { shellPrice, type Reward } from "./lib/reward"
 import { COUNTRY_LABEL, dec, fmt, ROLE_LABEL, roman, SHELL_LABEL, TYPE_LABEL } from "./lib/text"
 import type { Battle, BattleStats, Country, FoeNote, Mode, Outcome, Role, VehType, Vehicle } from "./lib/types"
-import { byId, fork, gunArcText, successors, VEHICLES } from "./lib/vehicles"
+import { byId, fork, gunArcText, successors, tryById, VEHICLES } from "./lib/vehicles"
 import type { ChatLine, Lobby } from "./lib/wire"
 import { Auth } from "./ui/Auth"
 import { Chat } from "./ui/Chat"
@@ -168,12 +168,6 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!save || !nick) return
-    const gifted = grantAlvares(save, nick)
-    if (gifted !== save) setSave(gifted)
-  }, [save, nick])
-
-  useEffect(() => {
     if (save) void putSave(save)
   }, [save])
 
@@ -241,13 +235,14 @@ export default function App() {
     )
   }
 
-  const selected = byId(save.selected)
+  const selected = (save.selected && tryById(save.selected))
+    || (save.owned.map(tryById).find(Boolean) ?? null)
 
   return (
     <div className="app signed">
       <Atmosphere />
       <Chrome nick={nick} save={save} onExit={() => void signOut()} />
-      {screen === "hangar" && (
+      {screen === "hangar" && selected && (
         <Hangar
           save={save}
           selected={selected}
@@ -268,6 +263,12 @@ export default function App() {
           })}
           onScrap={(index) => patch((s) => scrapGear(s, s.selected, index))}
         />
+      )}
+      {screen === "hangar" && !selected && (
+        <main className="hangar">
+          <header className="top"><h1>Ангар</h1><Purse save={save} /></header>
+          <p className="empty">нет техники — открой исследование</p>
+        </main>
       )}
       {screen === "depot" && (
         <DepotScreen
@@ -307,7 +308,7 @@ export default function App() {
       {screen === "research" && (
         <Research save={save} onBack={() => setScreen("hangar")} onOpen={(id) => openDossier(id, "research")} />
       )}
-      {screen === "modes" && (
+      {screen === "modes" && selected && (
         <Gate
           tank={selected}
           onBack={() => setScreen("hangar")}
@@ -326,7 +327,7 @@ export default function App() {
           }}
         />
       )}
-      {screen === "bots" && (
+      {screen === "bots" && selected && (
         <Modes
           tank={selected}
           onBack={() => setScreen("modes")}
@@ -340,7 +341,7 @@ export default function App() {
           }}
         />
       )}
-      {screen === "net" && (
+      {screen === "net" && selected && (
         <NetJoin
           tank={selected}
           up={net.up}
@@ -477,27 +478,35 @@ function Hangar({
           Одна машина. Одно действие за раунд.
         </button>
       )}
-      <button type="button" className={`hero c-${selected.country}`} onClick={() => onOpen(selected.id)}>
-        <TankArt id={selected.id} size="lg" />
-        <strong>{selected.name}</strong>
-        <em>{TYPE_LABEL[selected.type]} · {ROLE_LABEL[selected.role]}</em>
-        <span className="nums">
-          <i><b>{worn.hp}</b><small>прочность</small></i>
-          <i><b>{selected.shells[0].damage}</b><small>удар</small></i>
-          <i><b>{selected.shells[0].pen}</b><small>пробитие</small></i>
-          <i><b>{worn.speed}</b><small>км/ч</small></i>
-          <i><b>{dec(worn.reload)}</b><small>перезарядка</small></i>
-          <i><b>{dec(worn.aim)}</b><small>сведение</small></i>
-          <i><b>{dec(worn.dispersion, 2)}</b><small>разброс</small></i>
-          <i><b>{gunArcText(selected)}</b><small>УВН</small></i>
-        </span>
-      </button>
-      <button type="button" className="quiet block" onClick={() => onOpen(selected.id)}>подробные характеристики</button>
-      {save.owned.includes(selected.id) && (
+      {selected && worn ? (
+        <button type="button" className={`hero c-${selected.country}`} onClick={() => onOpen(selected.id)}>
+          <TankArt id={selected.id} size="lg" />
+          <strong>{selected.name}</strong>
+          <em>{TYPE_LABEL[selected.type]} · {ROLE_LABEL[selected.role]}</em>
+          <span className="nums">
+            <i><b>{worn.hp}</b><small>прочность</small></i>
+            <i><b>{selected.shells[0].damage}</b><small>удар</small></i>
+            <i><b>{selected.shells[0].pen}</b><small>пробитие</small></i>
+            <i><b>{worn.speed}</b><small>км/ч</small></i>
+            <i><b>{dec(worn.reload)}</b><small>перезарядка</small></i>
+            <i><b>{dec(worn.aim)}</b><small>сведение</small></i>
+            <i><b>{dec(worn.dispersion, 2)}</b><small>разброс</small></i>
+            <i><b>{gunArcText(selected)}</b><small>УВН</small></i>
+          </span>
+        </button>
+      ) : (
+        <p className="empty hero-empty">нет техники — открой исследование и собери ветку по скрину</p>
+      )}
+      {selected && (
+        <button type="button" className="quiet block" onClick={() => onOpen(selected.id)}>подробные характеристики</button>
+      )}
+      {selected && save.owned.includes(selected.id) && (
         <GearBar
           ids={save.gear[selected.id] ?? []}
           stock={save.depot?.gear ?? {}}
           silver={save.silver}
+          tankType={selected.type}
+          tankTier={selected.tier}
           onChange={onGear}
           onBuy={onBuyGear}
           onScrap={onScrap}
@@ -652,6 +661,8 @@ function Dossier({
           ids={save.gear[id] ?? []}
           stock={save.depot?.gear ?? {}}
           silver={save.silver}
+          tankType={v.type}
+          tankTier={v.tier}
           onChange={onGear}
           onBuy={onBuyGear}
           onScrap={onScrap}

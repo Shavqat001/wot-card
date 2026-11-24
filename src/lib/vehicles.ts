@@ -1,6 +1,13 @@
 import type { Shell, Vehicle, VehType } from "./types"
+import { mergeGermanyTree } from "./germanyTree"
+import { mergeUsaTree } from "./usaTree"
+import { mergeUssrTree } from "./ussrTree"
 import { EXTRA } from "./vehiclesExtra"
 import { NATIONS } from "./vehiclesNations"
+
+function mergeTrees(list: Vehicle[]): Vehicle[] {
+  return mergeUsaTree(mergeGermanyTree(mergeUssrTree(list)))
+}
 
 function guns(
   ap: [number, number],
@@ -668,10 +675,11 @@ function rebuild() {
   }
 }
 
+VEHICLES.splice(0, VEHICLES.length, ...mergeTrees(VEHICLES))
 rebuild()
 
 export function adoptVehicles(list: Vehicle[]) {
-  VEHICLES.splice(0, VEHICLES.length, ...list)
+  VEHICLES.splice(0, VEHICLES.length, ...mergeTrees(list))
   rebuild()
 }
 
@@ -679,6 +687,10 @@ export function byId(id: string): Vehicle {
   const v = index.get(id)
   if (!v) throw new Error(`нет машины ${id}`)
   return v
+}
+
+export function tryById(id: string): Vehicle | null {
+  return index.get(id) ?? null
 }
 
 export function successors(id: string): Vehicle[] {

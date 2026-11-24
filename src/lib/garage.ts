@@ -1,4 +1,4 @@
-import { gearById } from "./gear"
+import { gearById, gearPriceFor } from "./gear"
 import { GOLD_PACKS, GOLD_TO_SILVER, GOLD_TO_XP, shellPackPrice } from "./shop"
 import type { ShellKind, Vehicle } from "./types"
 import { byId, successors, VEHICLES } from "./vehicles"
@@ -24,13 +24,31 @@ export interface Save {
 }
 
 /** Стартовые лёгкие III уровня: СССР, Германия, США. */
-export const STARTER_TANKS = ["t46", "pz2", "m3st"] as const
+export const STARTER_TANKS = ["t70", "pz2", "m3st"] as const
 
 export function parkIds(): string[] {
   return [...STARTER_TANKS]
 }
 
 export const PARK = parkIds()
+
+/** Стартер + предки (МС-1 → Т-60 → Т-70…). */
+export function ownedWithPreds(ids: readonly string[]): string[] {
+  const have = new Set<string>()
+  for (const id of ids) {
+    let cur: string | null = id
+    let guard = 0
+    while (cur && !have.has(cur) && guard++ < 12) {
+      have.add(cur)
+      try {
+        cur = byId(cur).pred
+      } catch {
+        break
+      }
+    }
+  }
+  return [...have]
+}
 
 export function emptyDepot(): Depot {
   return { gear: {}, shells: { ap: 0, apcr: 0, he: 0 } }
@@ -43,7 +61,7 @@ export function freshSave(): Save {
     gold: 0,
     bonds: 0,
     freeXp: 0,
-    owned: [...STARTER_TANKS],
+    owned: ownedWithPreds(STARTER_TANKS),
     xp: {},
     selected: STARTER_TANKS[0],
     gear: {},
@@ -185,10 +203,12 @@ export function scrapDepotGear(save: Save, gearId: string): Save {
   return { ...save, depot: withGearQty(save.depot, gearId, -1) }
 }
 
-export function buyGear(save: Save, gearId: string, qty = 1): Save | null {
+export function buyGear(save: Save, gearId: string, qty = 1, vehicleId = save.selected): Save | null {
   const item = gearById(gearId)
   if (!item || qty < 1) return null
-  const cost = item.cost * qty
+  const tank = byId(vehicleId)
+  if (!tank) return null
+  const cost = gearPriceFor(gearId, tank) * qty
   if (save.silver < cost) return null
   return { ...save, silver: save.silver - cost, depot: withGearQty(save.depot ?? emptyDepot(), gearId, qty) }
 }

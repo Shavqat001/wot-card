@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { chooseAi } from "./ai"
 import { actionError, createBattle, resolveRound, step } from "./battle"
-import { fit, gearHint, gearById } from "./gear"
+import { fit, gearById, gearHint, gearPrice } from "./gear"
 import { applyReward, buy, buyGear, buyGold, freshSave, goldToSilver, goldToXp, loadSave, scrapGear, setGear } from "./garage"
 import { mulberry32 } from "./rng"
 import {
@@ -381,9 +381,9 @@ describe("ангар", () => {
     expect(fit(base, ["harden"]).hp).toBe(Math.round(base.hp * 1.08))
     const battle = createBattle("t34", "duel", () => 0.4, ["harden"])
     expect(battle.units[battle.playerIndex].maxHp).toBe(Math.round(base.hp * 1.08))
-    const rich = { ...freshSave(), owned: ["t34", ...freshSave().owned], selected: "t34", silver: 50000 }
+    const rich = { ...freshSave(), owned: ["t34", ...freshSave().owned], selected: "t34", silver: 500000 }
     const bought = buyGear(rich, "rammer")!
-    expect(bought.silver).toBe(50000 - gearById("rammer")!.cost)
+    expect(bought.silver).toBe(500000 - 150000)
     expect(bought.depot.gear.rammer).toBe(1)
     let save = setGear(bought, "t34", 0, "rammer")
     expect(save.gear.t34[0]).toBe("rammer")
@@ -403,6 +403,18 @@ describe("ангар", () => {
     expect(buyGear({ ...freshSave(), silver: 0 }, "rammer")).toBeNull()
     expect(gearHint(gearById("vent")!)).toEqual(["перезарядка", "сведение", "обзор", "в минуту"])
     expect(gearHint(gearById("liner")!)).toEqual(["фугас"])
+  })
+
+  it("цена оборудования зависит от типа и уровня", () => {
+    expect(gearPrice("rammer", "heavy", 7)).toBe(300000)
+    expect(gearPrice("rammer", "td", 8)).toBe(600000)
+    expect(gearPrice("rammer", "medium", 7)).toBe(150000)
+    expect(gearPrice("stab", "medium", 8)).toBe(300000)
+    expect(gearPrice("vent", "medium", 7)).toBe(100000)
+    expect(gearPrice("vent", "medium", 9)).toBe(200000)
+    expect(gearPrice("vent", "heavy", 8)).toBe(300000)
+    expect(gearPrice("vent", "spg", 9)).toBe(600000)
+    expect(gearPrice("optics", "light", 5)).toBe(150000)
   })
 
   it("магазин продаёт золото и меняет его на серебро и опыт", () => {

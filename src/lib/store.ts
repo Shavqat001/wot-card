@@ -1,6 +1,6 @@
 import type { Database, SqlJsStatic } from "sql.js"
 import { catalogStale, seedCatalog } from "./catalog"
-import { emptyDepot, freshSave, loadSave, SAVE_KEY, STARTER_TANKS, type Save } from "./garage"
+import { emptyDepot, freshSave, loadSave, ownedWithPreds, SAVE_KEY, STARTER_TANKS, type Save } from "./garage"
 import { cleanNick, nickError, nickKey } from "./nick"
 import type { ShellKind } from "./types"
 import schema from "./schema"
@@ -351,29 +351,49 @@ function loadOrSeed(base: Database, id: string): { save: Save; rebuilt: boolean 
 const GIFT_NICK = "alvares"
 const GIFT_TANKS = ["t34", "kv1", "sherman"]
 
+const ADMIN_NICK = "admin"
+const ADMIN_SILVER = 99_000_000
+const ADMIN_GOLD = 9_999_999
+const ADMIN_BONDS = 9_999_999
+const ADMIN_FREE_XP = 9_999_999
+
 export function grantAlvares(save: Save, nick: string): Save {
   if (nickKey(nick) !== GIFT_NICK) return save
-  if (
-    save.silver === 100000
-    && save.owned.length === GIFT_TANKS.length
-    && GIFT_TANKS.every((id) => save.owned.includes(id))
-  ) return save
-  const owned = [...GIFT_TANKS]
-  const xp: Record<string, number> = {}
-  const gear: Record<string, string[]> = {}
-  for (const id of owned) {
-    xp[id] = save.xp[id] ?? 0
-    if (save.gear[id]) gear[id] = save.gear[id]
+  /* подарок один раз: после выдачи кошелёк и покупки больше не трогаем */
+  if (GIFT_TANKS.every((id) => save.owned.includes(id))) return save
+  const owned = [...new Set([...GIFT_TANKS, ...save.owned])]
+  const xp: Record<string, number> = { ...save.xp }
+  const gear: Record<string, string[]> = { ...save.gear }
+  for (const id of GIFT_TANKS) {
+    xp[id] = xp[id] ?? 0
   }
   return {
     ...save,
-    silver: 100000,
-    gold: 100,
-    bonds: 500,
+    silver: Math.max(save.silver, 100000),
+    gold: Math.max(save.gold, 100),
+    bonds: Math.max(save.bonds, 500),
     owned,
     xp,
-    selected: owned.includes(save.selected) ? save.selected : owned[0],
+    selected: owned.includes(save.selected) ? save.selected : GIFT_TANKS[0],
     gear,
+  }
+}
+
+/** Ник admin — тестовый кошелёк с миллионами; на входе поднимает пол. */
+export function grantAdmin(save: Save, nick: string): Save {
+  if (nickKey(nick) !== ADMIN_NICK) return save
+  if (
+    save.silver >= ADMIN_SILVER
+    && save.gold >= ADMIN_GOLD
+    && save.bonds >= ADMIN_BONDS
+    && save.freeXp >= ADMIN_FREE_XP
+  ) return save
+  return {
+    ...save,
+    silver: Math.max(save.silver, ADMIN_SILVER),
+    gold: Math.max(save.gold, ADMIN_GOLD),
+    bonds: Math.max(save.bonds, ADMIN_BONDS),
+    freeXp: Math.max(save.freeXp, ADMIN_FREE_XP),
   }
 }
 
@@ -404,29 +424,29 @@ function rememberStarter(id: string) {
 function trimFatPark(save: Save): Save {
   if (save.owned.length < 20) return save
   if (Object.values(save.xp).some((v) => v > 0)) return save
+  const owned = ownedWithPreds(STARTER_TANKS)
   return {
     ...save,
-    owned: [...STARTER_TANKS],
-    selected: STARTER_TANKS.includes(save.selected as typeof STARTER_TANKS[number])
-      ? save.selected
-      : STARTER_TANKS[0],
+    owned,
+    selected: owned.includes(save.selected) ? save.selected : (owned[0] ?? ""),
     gear: {},
   }
 }
 
-/** 250 000 серебра, 15 000 свободного опыта и три танка III уровня. */
+/** 250 000 серебра, 15 000 свободного опыта и три танка III уровня (+ предки). */
 function grantStarter(save: Save, id: string): Save {
   if (starterSeen(id)) return trimFatPark(save)
   rememberStarter(id)
   if (save.silver !== 24000 || save.freeXp !== 0 || save.gold !== 0 || save.bonds !== 0) {
     return trimFatPark(save)
   }
+  const owned = ownedWithPreds(STARTER_TANKS)
   return {
     ...save,
     silver: 250000,
     freeXp: 15000,
-    owned: [...STARTER_TANKS],
-    selected: STARTER_TANKS[0],
+    owned,
+    selected: owned[0] ? STARTER_TANKS[0] : "",
     xp: {},
     gear: {},
   }
@@ -434,7 +454,7 @@ function grantStarter(save: Save, id: string): Save {
 
 function enterWithGift(id: string, nick: string): AuthOk {
   const loaded = loadOrSeed(db!, id)
-  const save = grantAlvares(grantStarter(loaded.save, id), nick)
+  const save = grantAdmin(grantAlvares(grantStarter(loaded.save, id), nick), nick)
   if (save !== loaded.save) writeSave(db!, save, id)
   lastSnap = snapOf(save)
   void persist()
@@ -514,7 +534,7 @@ export async function bootStore(): Promise<{ save: Save | null; nick: string | n
     if (nick) {
       activeId = sid.id
       const loaded = loadOrSeed(db, sid.id)
-      const save = grantAlvares(grantStarter(loaded.save, sid.id), nick)
+      const save = grantAdmin(grantAlvares(grantStarter(loaded.save, sid.id), nick), nick)
       if (save !== loaded.save) writeSave(db, save, sid.id)
       lastSnap = snapOf(save)
       await flushPersist()

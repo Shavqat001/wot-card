@@ -8,6 +8,7 @@ import type { Battle, Mode, Order, ShellKind } from "../lib/types"
 import { byId } from "../lib/vehicles"
 import { shellPrice } from "../lib/reward"
 import { fmt, SHELL_LABEL } from "../lib/text"
+import { AimSight, type AimPoint } from "./AimSight"
 import { TankArt } from "./TankArt"
 import { playHit, playShot } from "./sound"
 
@@ -74,6 +75,7 @@ export function BattleScreen({
   const [nudge, setNudge] = useState<"enemy" | null>(null)
   const [shake, setShake] = useState(false)
   const [spots, setSpots] = useState<{ x: number; y: number }[] | null>(null)
+  const [firing, setFiring] = useState(false)
   const before = useRef(battle.units.map(() => true))
   const busy = useRef(false)
   const extra = useRef(false)
@@ -84,6 +86,7 @@ export function BattleScreen({
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([])
   const playRef = useRef<(next: Battle) => void>(() => {})
   const bindRef = useRef(bind)
+  const aimPoint = useRef<AimPoint>({ x: 50, y: 42, zone: "hull" })
   bindRef.current = bind
 
   useEffect(() => {
@@ -95,7 +98,7 @@ export function BattleScreen({
 
   useEffect(() => {
     mounted.current = true
-    cardRefs.current[battle.playerIndex]?.scrollIntoView({ inline: "center", block: "nearest" })
+    cardRefs.current[battle.playerIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" })
     return () => {
       mounted.current = false
       timers.current.forEach((id) => window.clearTimeout(id))
@@ -222,7 +225,7 @@ export function BattleScreen({
   playRef.current = play
 
   function act(order: Order) {
-    if (busy.current || hold || phase !== "idle" || battle.over) return
+    if (busy.current || hold || phase !== "idle" || battle.over || firing) return
     const err = actionError(battle, order)
     if (err) {
       setWarn(err)
@@ -233,15 +236,24 @@ export function BattleScreen({
       })
       return
     }
-    busy.current = true
-    setWarn(null)
-    setNudge(null)
-    if (boot.online) {
-      setHold(true)
-      sendOrder?.(order)
+    const go = () => {
+      busy.current = true
+      setWarn(null)
+      setNudge(null)
+      setFiring(false)
+      if (boot.online) {
+        setHold(true)
+        sendOrder?.(order)
+        return
+      }
+      play(step(battle, order, rng.current))
+    }
+    if (order.kind === "attack" && sel != null) {
+      setFiring(true)
+      later(reduceMotion() ? 40 : 280, go)
       return
     }
-    play(step(battle, order, rng.current))
+    go()
   }
 
   const me = battle.units[battle.playerIndex]
@@ -249,9 +261,18 @@ export function BattleScreen({
   const worn = me.kit.length ? fit(mine, me.kit) : fit(mine, gear)
   const loaded = me.charge >= worn.reload
   const watching = phase === "windup" || phase === "volley"
-  const canAct = phase === "idle" && !hold && me.alive && me.present
+  const canAct = phase === "idle" && !hold && !firing && me.alive && me.present
   const gun = gunWord(me.charge, worn.reload)
   const showShells = loaded && phase === "idle"
+  const aimTarget = sel != null ? battle.units[sel] : null
+  const showAim = Boolean(
+    aimTarget
+    && aimTarget.alive
+    && aimTarget.present
+    && aimTarget.side !== me.side
+    && phase === "idle"
+    && !intro,
+  )
 
   function tapCard(i: number) {
     const u = battle.units[i]
@@ -310,6 +331,7 @@ export function BattleScreen({
   const ownWords = phase === "volley" && spots
     ? battle.beats.filter((b) => b.own)
     : []
+  const teamSize = battle.units.filter((u) => u.side === 0).length
 
   return (
     <section className="battle">
@@ -320,12 +342,22 @@ export function BattleScreen({
       </header>
       <div
         className={["field", phase === "volley" ? "volley" : "", shake ? "shake" : ""].filter(Boolean).join(" ")}
+        data-size={teamSize}
         ref={fieldRef}
       >
-        <div className={nudge === "enemy" ? "lane enemy need" : "lane enemy"}>{lane(1)}</div>
+        <div className="lane ally" aria-label="союзники">{lane(0)}</div>
         <div className={intro ? "range dim" : "range"} aria-hidden><span className="vs">VS</span></div>
         {intro && <div className="versus"><span>VS</span></div>}
-        <div className="lane ally">{lane(0)}</div>
+        <div className={nudge === "enemy" ? "lane enemy need" : "lane enemy"} aria-label="противники">{lane(1)}</div>
+        {showAim && aimTarget && (
+          <AimSight
+            vehicleId={aimTarget.vid}
+            name={byId(aimTarget.vid).name}
+            ratio={Math.max(0, (hp[sel!] ?? aimTarget.hp) / aimTarget.maxHp)}
+            firing={firing}
+            onPoint={(p) => { aimPoint.current = p }}
+          />
+        )}
         {phase === "volley" && spots && (
           <svg className="fx" aria-hidden>
             {battle.beats.map((b, i) => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
-import { GEAR, gearHint, slotsOf, type Gear } from "../lib/gear"
+import { GEAR, gearHint, gearPrice, slotsOf, type Gear } from "../lib/gear"
 import { fmt } from "../lib/text"
+import type { VehType } from "../lib/types"
 
 const KEY = "angar.gear"
 
@@ -20,6 +21,8 @@ export function GearBar({
   ids,
   stock,
   silver,
+  tankType,
+  tankTier,
   onChange,
   onBuy,
   onScrap,
@@ -28,6 +31,8 @@ export function GearBar({
   ids: string[]
   stock: Record<string, number>
   silver: number
+  tankType: VehType
+  tankTier: number
   onChange: (index: number, id: string | null) => void
   onBuy: (index: number, id: string) => void
   onScrap: (index: number) => void
@@ -43,6 +48,8 @@ export function GearBar({
   const stored = GEAR.filter((g) => (stock[g.id] ?? 0) > 0 && !taken.has(g.id))
   const shop = GEAR.filter((g) => (stock[g.id] ?? 0) < 1 && !taken.has(g.id))
   const wanted = ask ? GEAR.find((g) => g.id === ask) : null
+  const wantedCost = wanted ? gearPrice(wanted.id, tankType, tankTier) : 0
+  const priceOf = (id: string) => gearPrice(id, tankType, tankTier)
 
   function toggle() {
     const next = !open
@@ -145,13 +152,14 @@ export function GearBar({
           <p className="gearhead">купить</p>
           <div className="picker">
             {shop.map((g) => {
-              const poor = silver < g.cost || free < 0
+              const cost = priceOf(g.id)
+              const poor = silver < cost || free < 0
               return (
                 <button
                   key={g.id}
                   type="button"
                   className={poor ? "full" : ""}
-                  aria-label={`${g.name}. ${fmt(g.cost)}. меняет ${gearHint(g).join(", ")}`}
+                  aria-label={`${g.name}. ${fmt(cost)}. меняет ${gearHint(g).join(", ")}`}
                   tabIndex={open ? 0 : -1}
                   onClick={() => {
                     if (!poor) setAsk(g.id)
@@ -160,32 +168,34 @@ export function GearBar({
                   <img src={`${import.meta.env.BASE_URL}gear/${g.id}.png`} alt="" />
                   <b>{g.name}</b>
                   <small>{g.line}</small>
-                  <span className={silver < g.cost ? "sum poor" : "sum"}>{fmt(g.cost)}</span>
+                  <span className={silver < cost ? "sum poor" : "sum"}>{fmt(cost)}</span>
                   <em>{gearHint(g).join(" · ")}</em>
                   <Hint g={g} />
                 </button>
               )
             })}
           </div>
-          {wanted && (
-            <div className="ask">
-              <p>купить {wanted.name} за {fmt(wanted.cost)}?</p>
-              <div className="confirm">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (free >= 0) onBuy(free, wanted.id)
-                    setAsk(null)
-                  }}
-                >
-                  да
-                </button>
-                <button type="button" onClick={() => setAsk(null)}>нет</button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
+      {wanted && (
+        <div className="modal" onClick={() => setAsk(null)}>
+          <div className="modalbox askbox" onClick={(e) => e.stopPropagation()}>
+            <p>купить {wanted.name} за {fmt(wantedCost)}?</p>
+            <div className="confirm">
+              <button
+                type="button"
+                onClick={() => {
+                  if (free >= 0) onBuy(free, wanted.id)
+                  setAsk(null)
+                }}
+              >
+                да
+              </button>
+              <button type="button" onClick={() => setAsk(null)}>нет</button>
+            </div>
+          </div>
+        </div>
+      )}
       {menu && held && (
         <div
           className="ctx"

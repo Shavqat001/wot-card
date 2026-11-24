@@ -1,8 +1,10 @@
 import { useState } from "react"
 import type { Save } from "../lib/garage"
+import { gearPriceFor } from "../lib/gear"
 import { GOLD_PACKS, GOLD_TO_SILVER, GOLD_TO_XP, SHELL_PACKS, SHOP_GEAR, SILVER_OFFERS, XP_OFFERS, shellPackPrice } from "../lib/shop"
 import { SHELL_LABEL, fmt } from "../lib/text"
 import type { ShellKind } from "../lib/types"
+import { tryById } from "../lib/vehicles"
 import { Purse } from "./Purse"
 
 type Ask =
@@ -28,11 +30,13 @@ export function ShopScreen({
   onGoldXp: (gold: number) => void
 }) {
   const [ask, setAsk] = useState<Ask | null>(null)
+  const tank = save.selected ? tryById(save.selected) : null
+  const priceOf = (id: string) => tank ? gearPriceFor(id, tank) : 0
 
   function line(q: Ask): string {
     if (q.kind === "gear") {
       const g = SHOP_GEAR.find((item) => item.id === q.id)!
-      return `купить ${g.name} за ${fmt(g.cost)}?`
+      return `купить ${g.name} за ${fmt(priceOf(g.id))}?`
     }
     if (q.kind === "shells") {
       return `купить ${SHELL_LABEL[q.ammo]} ×${q.qty} за ${fmt(shellPackPrice(q.ammo, q.qty))}?`
@@ -63,16 +67,17 @@ export function ShopScreen({
         <Purse save={save} />
       </header>
 
-      <p className="gearhead">оборудование</p>
+      <p className="gearhead">оборудование · цена для {tank?.name ?? "—"}</p>
       <div className="shopgrid">
         {SHOP_GEAR.map((g) => {
-          const poor = save.silver < g.cost
+          const cost = priceOf(g.id)
+          const poor = save.silver < cost
           return (
             <button key={g.id} type="button" className={poor ? "full" : ""} onClick={() => { if (!poor) setAsk({ kind: "gear", id: g.id }) }}>
               <img src={`${import.meta.env.BASE_URL}gear/${g.id}.png`} alt="" />
               <b>{g.name}</b>
               <small>{g.line}</small>
-              <span className={poor ? "sum poor" : "sum"}>{fmt(g.cost)}</span>
+              <span className={poor ? "sum poor" : "sum"}>{fmt(cost)}</span>
             </button>
           )
         })}

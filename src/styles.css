@@ -621,10 +621,8 @@ button:focus-visible { outline: 1px solid var(--brass); outline-offset: 2px; }
 .study .canvas {
   flex: 1;
   overflow: auto;
-  display: flex;
-  justify-content: safe center;
-  align-items: safe center;
-  padding: 12px 16px 24px 8px;
+  display: block;
+  padding: 0 16px 24px 8px;
   background: #10120f;
   cursor: grab;
   user-select: none;
@@ -637,21 +635,33 @@ button:focus-visible { outline: 1px solid var(--brass); outline-offset: 2px; }
 .study .stage {
   position: relative;
   min-width: min-content;
-  flex: 0 0 auto;
+  width: max-content;
+  padding-top: 0;
 }
 .study .ruler {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   display: grid;
-  margin: 0 0 8px;
-  color: var(--dim);
-  font-size: 11px;
-  letter-spacing: .16em;
+  margin: 0 0 10px;
+  padding: 10px 0 8px;
+  color: #9a9e96;
+  font-size: 12px;
+  letter-spacing: .18em;
   text-transform: uppercase;
   text-align: center;
-  opacity: .7;
+  background: linear-gradient(180deg, #10120f 70%, rgba(16, 18, 15, .92) 100%);
+  border-bottom: 1px solid rgba(90, 96, 86, .35);
 }
 .study .tree {
   position: relative;
   display: grid;
+}
+.study .tree-empty {
+  grid-column: 1 / -1;
+  margin: 24px 8px;
+  color: var(--dim);
+  font-size: 14px;
 }
 .study .wires {
   position: absolute;
@@ -683,6 +693,16 @@ button:focus-visible { outline: 1px solid var(--brass); outline-offset: 2px; }
   opacity: .92;
   border-color: #8a5a28;
 }
+.study .node.locked {
+  opacity: .88;
+}
+.study .node.locked .art img,
+.study .node.locked .ghost-tank {
+  filter: grayscale(.4) brightness(.82);
+}
+.study .node.locked b {
+  opacity: .9;
+}
 .study .node .mark {
   position: absolute;
   left: 0;
@@ -696,12 +716,35 @@ button:focus-visible { outline: 1px solid var(--brass); outline-offset: 2px; }
   font-style: normal;
   letter-spacing: .04em;
 }
-.study .node .art.sm { height: 46px; margin: 0; background: transparent; }
+.study .node .art.sm {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  overflow: hidden;
+  background: #0a0c0a;
+}
 .study .node .art::after { display: none; }
 .study .node .art img {
-  object-fit: contain;
-  object-position: center;
-  transform: none;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--art-ox, 50%) var(--art-oy, 45%);
+  transform: scale(var(--art-zoom, 1));
+  transform-origin: var(--art-ox, 50%) var(--art-oy, 45%);
+  filter: contrast(1.06) saturate(1.04);
+}
+.study .node.locked .art img {
+  filter: grayscale(.35) brightness(.85) contrast(1.06);
+}
+/* полоска ангара / мелкие превью — тот же нормальный кадр */
+.art.sm[data-fit="1"] {
+  overflow: hidden;
+}
+.art.sm[data-fit="1"] img {
+  object-fit: cover;
+  object-position: var(--art-ox, 50%) var(--art-oy, 45%);
+  transform: scale(var(--art-zoom, 1));
+  transform-origin: var(--art-ox, 50%) var(--art-oy, 45%);
 }
 .study .node b {
   display: block;
@@ -966,9 +1009,13 @@ button.gearhead small {
 }
 .fpop .wipe { margin-top: 6px; }
 .modal {
-  position: absolute;
-  inset: 0;
-  z-index: 24;
+  position: fixed;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  z-index: 40;
+  width: min(640px, 100%);
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1080,7 +1127,20 @@ button.gearhead small {
 .confirm { display: flex; gap: 14px; align-items: center; color: var(--dim); animation: rise .25s ease; }
 .confirm button { color: var(--brass); min-height: 32px; }
 
-.back { color: var(--dim); min-height: 36px; }
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+  min-height: 36px;
+}
+.back::before {
+  content: "←";
+  display: inline-block;
+  font-size: 1.05em;
+  font-weight: 700;
+  line-height: 1;
+}
 .gunline {
   margin: 8px 0 4px;
   color: var(--dim);
@@ -1301,9 +1361,10 @@ button.gearhead small {
   flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
   justify-content: center;
-  gap: 0;
+  gap: 4px;
 }
 .field.shake { animation: shake .4s linear; }
 @keyframes shake {
@@ -1314,32 +1375,35 @@ button.gearhead small {
   100% { transform: scale(1); }
 }
 .range {
-  flex: 0 0 36px;
-  height: 36px;
+  flex: 0 0 22px;
+  width: 22px;
   position: relative;
   display: grid;
   place-items: center;
+  align-self: stretch;
 }
 .range::before {
   content: "";
   position: absolute;
-  left: 8%;
-  right: 8%;
-  top: 50%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(215, 181, 106, .45), transparent);
+  top: 6%;
+  bottom: 6%;
+  left: 50%;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(215, 181, 106, .45), transparent);
   animation: line 2.8s ease-in-out infinite;
 }
 .range.dim .vs { opacity: 0; }
 .vs {
   position: relative;
   z-index: 1;
-  padding: 0 8px;
+  padding: 6px 0;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
   background: var(--bg);
   color: var(--brass);
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 15px;
-  letter-spacing: .22em;
+  font-size: 12px;
+  letter-spacing: .28em;
   line-height: 1;
 }
 .versus {
@@ -1353,7 +1417,7 @@ button.gearhead small {
 .versus span {
   color: var(--brass);
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(88px, 22vw, 150px);
+  font-size: clamp(72px, 22vw, 130px);
   letter-spacing: .14em;
   line-height: 1;
   text-shadow: 0 12px 40px rgba(0, 0, 0, .65);
@@ -1366,17 +1430,23 @@ button.gearhead small {
   100% { transform: scale(1.08); opacity: 0; letter-spacing: .2em; }
 }
 @keyframes line {
-  50% { opacity: .35; transform: scaleX(.92); }
+  50% { opacity: .35; transform: scaleY(.92); }
 }
 .lane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
+  flex-direction: column;
   justify-content: center;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 4px 2px 6px;
-  scroll-snap-type: x proximity;
+  align-items: stretch;
+  gap: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 2px 2px 4px;
+  scroll-snap-type: y proximity;
   scrollbar-width: none;
-  mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 12px, #000 calc(100% - 12px), transparent);
 }
 @supports (justify-content: safe center) {
   .lane { justify-content: safe center; }
@@ -1384,55 +1454,82 @@ button.gearhead small {
 .lane::-webkit-scrollbar { display: none; }
 .lane.need { animation: nudge .42s ease; }
 @keyframes nudge {
-  30% { transform: translateY(5px); }
-  65% { transform: translateY(-3px); }
+  30% { transform: translateX(5px); }
+  65% { transform: translateX(-3px); }
 }
-.slot { flex: 0 0 auto; scroll-snap-align: center; transition: transform .45s cubic-bezier(.2, .7, .2, 1); }
-.lane.enemy .slot[data-dist="2"] { transform: translateY(-4px); }
-.lane.enemy .slot[data-dist="0"] { transform: translateY(4px); }
-.lane.ally .slot[data-dist="2"] { transform: translateY(4px); }
-.lane.ally .slot[data-dist="0"] { transform: translateY(-4px); }
+.slot {
+  flex: 0 0 auto;
+  width: 100%;
+  scroll-snap-align: center;
+  transition: transform .45s cubic-bezier(.2, .7, .2, 1);
+}
+/* ближе к центру поля = ближняя дистанция */
+.lane.ally .slot[data-dist="0"] { transform: translateX(8px); }
+.lane.ally .slot[data-dist="2"] { transform: translateX(-4px); }
+.lane.enemy .slot[data-dist="0"] { transform: translateX(-8px); }
+.lane.enemy .slot[data-dist="2"] { transform: translateX(4px); }
 
 .bcard {
   position: relative;
-  width: 112px;
-  padding: 0 0 8px;
+  width: 100%;
+  padding: 0 0 6px;
   background: var(--card);
   border: 1px solid var(--line);
   text-align: left;
   overflow: hidden;
   transition: transform .38s cubic-bezier(.2, .8, .2, 1), filter .35s ease, opacity .4s ease, box-shadow .35s ease;
 }
-.bcard .art { height: 76px; margin: 0; }
+.bcard .art { height: 64px; margin: 0; }
 .bcard .art img { transform: scale(1.06); }
 .bcard.side-1 .art img { transform: scaleX(-1) scale(1.06); }
 .bcard b {
   display: block;
-  margin: 5px 8px 5px;
-  font-size: 12px;
+  margin: 4px 6px 4px;
+  font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.bcard .bar { margin: 0 8px; }
+.bcard .gun { margin: 0 6px 3px; }
+.bcard .bar { margin: 0 6px; }
 .bcard.me { border-color: var(--brass-2); }
 .bcard.ready { animation: pulse 1.5s ease-in-out infinite; }
 @keyframes pulse {
   50% { box-shadow: 0 0 0 1px var(--brass), 0 0 18px rgba(215, 181, 106, .4); }
 }
-.bcard.sel { transform: translateY(-6px); border-color: var(--brass); }
+.bcard.sel { transform: translateX(6px); border-color: var(--brass); }
+.lane.enemy .bcard.sel { transform: translateX(-6px); }
 .bcard.mark { box-shadow: 0 0 0 1px var(--moss); }
 .bcard.aided { box-shadow: 0 0 0 1px var(--moss), 0 0 16px rgba(142, 163, 122, .45); }
-.pose-attack.side-0 { transform: translateY(-34px) scale(1.05); }
-.pose-attack.side-1 { transform: translateY(34px) scale(1.05); }
-.pose-defend { transform: scale(.78) translateY(10px); }
-.pose-armor { transform: rotate(-16deg) skewX(-18deg) scale(1.06); }
-.pose-retreat.side-0 { transform: rotate(-16deg) translateX(10px); }
-.pose-retreat.side-1 { transform: rotate(16deg) translateX(-10px); }
-.bcard.wreck { opacity: .28; filter: grayscale(1); transform: translateY(14px) rotate(8deg); }
-.bcard.away { opacity: .16; transform: translateX(36px); }
-.side-1.away { transform: translateX(-36px); }
+.pose-attack.side-0 { transform: translateX(18px) scale(1.04); }
+.pose-attack.side-1 { transform: translateX(-18px) scale(1.04); }
+.pose-defend { transform: scale(.82); }
+.pose-armor { transform: rotate(-12deg) skewY(-8deg) scale(1.04); }
+.pose-retreat.side-0 { transform: rotate(-10deg) translateX(-8px); }
+.pose-retreat.side-1 { transform: rotate(10deg) translateX(8px); }
+.bcard.wreck { opacity: .28; filter: grayscale(1); transform: translateY(8px) rotate(6deg); }
+.bcard.away { opacity: .16; transform: translateX(-28px); }
+.side-1.away { transform: translateX(28px); }
+
+/* дуэль — крупнее; стычка/рота — компактнее под телефон */
+.field[data-size="1"] .bcard .art { height: 110px; }
+.field[data-size="1"] .bcard b { font-size: 13px; margin: 6px 8px 5px; }
+.field[data-size="5"] .lane { gap: 4px; }
+.field[data-size="5"] .bcard .art { height: 48px; }
+.field[data-size="5"] .bcard b { font-size: 10px; margin: 3px 5px; }
+.field[data-size="5"] .bcard .gun { font-size: 9px; }
+.field[data-size="7"] .lane { gap: 3px; }
+.field[data-size="7"] .bcard { padding-bottom: 4px; }
+.field[data-size="7"] .bcard .art { height: 36px; }
+.field[data-size="7"] .bcard b { font-size: 9px; margin: 2px 4px; }
+.field[data-size="7"] .bcard .gun { display: none; }
+.field[data-size="7"] .bcard .bar { height: 2px; margin: 0 4px; }
+
+.bcard.side-1 .muzzle {
+  right: auto;
+  left: 2px;
+}
 
 .spark-pen { animation: flashpen .42s ease; }
 .spark-rico { animation: flashrico .48s ease; }
@@ -1508,6 +1605,104 @@ button.gearhead small {
   0% { opacity: 0; transform: translate(-50%, -30%) scale(.85); }
   16% { opacity: 1; transform: translate(-50%, -120%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -190%); }
+}
+
+.aimsight {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 5;
+  width: min(92%, 340px);
+  transform: translate(-50%, -50%);
+  padding: 10px 12px 12px;
+  background: rgba(10, 12, 10, .92);
+  border: 1px solid var(--brass-2);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
+  pointer-events: none;
+  animation: rise .22s ease;
+}
+.aimsight-name {
+  margin: 0 0 6px;
+  text-align: center;
+  color: var(--brass);
+  font-size: 13px;
+  letter-spacing: .04em;
+}
+.aimsight-stage {
+  position: relative;
+  height: 168px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 70%, #1c221c 0%, #0c0e0c 72%);
+  border: 1px solid var(--line);
+}
+.aimsight-tank {
+  position: absolute;
+  inset: 8px 12px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+.aimsight-tank .art {
+  flex: 1;
+  height: auto;
+  margin: 0;
+  background: transparent;
+}
+.aimsight-tank .art::after { display: none; }
+.aimsight-tank .art img {
+  object-fit: contain;
+  object-position: center bottom;
+  transform: none;
+}
+.aimsight-tank .bar { margin-top: 6px; }
+.reticle {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border: 1.5px solid rgba(240, 212, 138, .95);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(0, 0, 0, .25);
+  pointer-events: none;
+}
+.reticle::before,
+.reticle::after {
+  content: "";
+  position: absolute;
+  background: rgba(240, 212, 138, .9);
+}
+.reticle::before {
+  left: 50%;
+  top: 3px;
+  bottom: 3px;
+  width: 1px;
+  transform: translateX(-50%);
+}
+.reticle::after {
+  top: 50%;
+  left: 3px;
+  right: 3px;
+  height: 1px;
+  transform: translateY(-50%);
+}
+.aim-flash {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6d0 0%, rgba(240, 196, 90, .7) 40%, transparent 70%);
+  animation: muzzle .28s ease forwards;
+  pointer-events: none;
+}
+.aimsight.fire .reticle { opacity: .35; }
+.aimsight-hint {
+  margin: 8px 0 0;
+  text-align: center;
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: .06em;
 }
 
 .toast { min-height: 18px; margin: 0; text-align: center; color: var(--brass); font-size: 13px; opacity: 0; transform: translateY(4px); transition: .2s ease; }
@@ -1717,14 +1912,21 @@ button.gearhead small {
   gap: 8px;
 }
 .chat-log > p { margin: 0; color: var(--dim); font-size: 13px; }
-.chat-log p.mine { text-align: right; }
-.chat-log b {
-  display: block;
-  color: var(--brass);
-  font-size: 11px;
-  letter-spacing: .06em;
+.chat-line {
+  margin: 0;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
 }
-.chat-log span { color: var(--text); font-size: 14px; line-height: 1.35; }
+.chat-nick {
+  color: #f2efe6;
+  font-weight: 600;
+}
+.chat-text {
+  color: #8a9184;
+  font-weight: 400;
+}
 .chat-row { display: flex; gap: 6px; }
 .chat-row input {
   flex: 1;

@@ -13,7 +13,7 @@ const POOLS: Record<string, string[]> = {
   ricochet: ["hits/rikoshet.mp3"],
   splash: ["shots/babaha.mp3"],
   kill: ["hits/tank-destroyed.mp3"],
-  click: ["clicks/click.wav", "clicks/click2.wav", "clicks/click3.wav", "clicks/click4.wav"],
+  click: ["clicks/click.wav"],
 }
 
 const MUSIC = "music/battle-music1.mp3"
@@ -208,7 +208,7 @@ export function playClick() {
   playPool("click", 0.42)
 }
 
-/** Случайный клик из public/sounds/clicks на кнопках и прочих нажимаемых элементах. */
+/** Клик public/sounds/clicks/click.wav на кнопках и прочих нажимаемых элементах. */
 export function armClicks() {
   if (clicksArmed || typeof document === "undefined") return
   clicksArmed = true

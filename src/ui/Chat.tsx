@@ -89,9 +89,10 @@ export function Chat({
           <div className="chat-log" ref={logRef}>
             {lines.length === 0 && <p>Эфир чист. Напишите первым.</p>}
             {lines.map((line) => (
-              <p key={line.id} className={line.nick === nick ? "mine" : ""}>
-                <b>{line.nick}</b>
-                <span>{line.text}</span>
+              <p key={line.id} className="chat-line">
+                <b className="chat-nick">{line.nick}</b>
+                {" "}
+                <span className="chat-text">{line.text}</span>
               </p>
             ))}
           </div>

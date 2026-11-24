@@ -1,10 +1,9 @@
-import type { Vehicle } from "./types"
+import type { VehType, Vehicle } from "./types"
 
 export interface Gear {
   id: string
   name: string
   line: string
-  cost: number
   reload?: number
   aim?: number
   dispersion?: number
@@ -16,15 +15,15 @@ export interface Gear {
 }
 
 export const GEAR: Gear[] = [
-  { id: "rammer", name: "Досылатель", line: "короче перезарядка", cost: 5000, reload: 0.9 },
-  { id: "stab", name: "Стабилизатор", line: "меньше разброс", cost: 5000, dispersion: 0.9 },
-  { id: "drives", name: "Приводы наводки", line: "быстрее сведение", cost: 4000, aim: 0.9 },
-  { id: "vent", name: "Вентиляция", line: "экипаж бодрее", cost: 5000, reload: 0.97, aim: 0.97, view: 1.03 },
-  { id: "optics", name: "Оптика", line: "дальше обзор", cost: 4000, view: 1.1 },
-  { id: "harden", name: "Запас прочности", line: "больше прочности", cost: 3500, hp: 1.08 },
-  { id: "liner", name: "Подбой", line: "тише фугас", cost: 3000, he: 0.8 },
-  { id: "turbo", name: "Турбина", line: "выше скорость", cost: 4500, speed: 1.1 },
-  { id: "exhaust", name: "Выхлоп", line: "гуще маскировка", cost: 3500, camo: 0.06 },
+  { id: "rammer", name: "Досылатель", line: "короче перезарядка", reload: 0.9 },
+  { id: "stab", name: "Стабилизатор", line: "меньше разброс", dispersion: 0.9 },
+  { id: "drives", name: "Приводы наводки", line: "быстрее сведение", aim: 0.9 },
+  { id: "vent", name: "Вентиляция", line: "экипаж бодрее", reload: 0.97, aim: 0.97, view: 1.03 },
+  { id: "optics", name: "Оптика", line: "дальше обзор", view: 1.1 },
+  { id: "harden", name: "Запас прочности", line: "больше прочности", hp: 1.08 },
+  { id: "liner", name: "Подбой", line: "тише фугас", he: 0.8 },
+  { id: "turbo", name: "Турбина", line: "выше скорость", speed: 1.1 },
+  { id: "exhaust", name: "Выхлоп", line: "гуще маскировка", camo: 0.06 },
 ]
 
 let BY = new Map(GEAR.map((g) => [g.id, g]))
@@ -32,6 +31,41 @@ let BY = new Map(GEAR.map((g) => [g.id, g]))
 export function adoptGear(list: Gear[]) {
   GEAR.splice(0, GEAR.length, ...list)
   BY = new Map(GEAR.map((g) => [g.id, g]))
+}
+
+/** Лёгкие как средние: вдвое дешевле тяжёлой схемы. */
+function softClass(type: VehType): boolean {
+  return type === "medium" || type === "light"
+}
+
+/**
+ * Досылатель и остальное (кроме вентиля):
+ * ТТ/ПТ/САУ ≤7 → 300к, ≥8 → 600к; СТ/ЛТ вдвое меньше.
+ */
+function standardPrice(type: VehType, tier: number): number {
+  const top = tier >= 8
+  if (softClass(type)) return top ? 300_000 : 150_000
+  return top ? 600_000 : 300_000
+}
+
+/**
+ * Вентиль: СТ/ЛТ ниже 8 → 100к, 8–10 → 200к;
+ * ТТ/ПТ/САУ до 8 → 300к, выше → 600к.
+ */
+function ventPrice(type: VehType, tier: number): number {
+  if (softClass(type)) return tier >= 8 ? 200_000 : 100_000
+  return tier <= 8 ? 300_000 : 600_000
+}
+
+/** Цена модуля для конкретной машины. Фиксированных 5к больше нет. */
+export function gearPrice(gearId: string, type: VehType, tier: number): number {
+  if (!BY.has(gearId)) return 0
+  if (gearId === "vent") return ventPrice(type, tier)
+  return standardPrice(type, tier)
+}
+
+export function gearPriceFor(gearId: string, vehicle: Pick<Vehicle, "type" | "tier">): number {
+  return gearPrice(gearId, vehicle.type, vehicle.tier)
 }
 
 export function gearHint(g: Gear): string[] {

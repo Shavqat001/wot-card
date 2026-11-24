@@ -1,7 +1,7 @@
 import { createRequire } from "node:module"
 import { describe, expect, it } from "vitest"
 import { buyGear, freshSave, setGear } from "./garage"
-import { bootStore, currentDb, grantAlvares, loginAccount, logoutAccount, openMemory, putSave, registerAccount, saveFromDb, setWasmFile, writeSave } from "./store"
+import { bootStore, currentDb, grantAdmin, grantAlvares, loginAccount, logoutAccount, openMemory, putSave, registerAccount, saveFromDb, setWasmFile, writeSave } from "./store"
 import { VEHICLES } from "./vehicles"
 
 setWasmFile(createRequire(import.meta.url).resolve("sql.js/dist/sql-wasm.wasm"))
@@ -20,7 +20,7 @@ describe("sqlite", () => {
     expect(hp).toBe(820)
     const shells = db.exec("SELECT COUNT(*) FROM vehicle_shell WHERE vehicle_id = 't34'")[0].values[0][0]
     expect(shells).toBe(3)
-    let save = buyGear({ ...freshSave(), owned: ["t34", ...freshSave().owned], selected: "t34" }, "rammer")!
+    let save = buyGear({ ...freshSave(), owned: ["t34", ...freshSave().owned], selected: "t34", silver: 400000 }, "rammer")!
     save = setGear(save, "t34", 0, "rammer")
     save = { ...save, silver: 18000, gold: 250, bonds: 12, freeXp: 40 }
     writeSave(db, save)
@@ -41,12 +41,32 @@ describe("sqlite", () => {
 describe("alvares", () => {
   it("оставляет три танка и кладёт кошелёк", () => {
     const save = grantAlvares(freshSave(), "ALVARES")
-    expect(save.owned).toEqual(["t34", "kv1", "sherman"])
+    expect(save.owned).toEqual(expect.arrayContaining(["t34", "kv1", "sherman"]))
     expect(save.silver).toBe(100000)
     expect(save.gold).toBe(100)
     expect(save.bonds).toBe(500)
     expect(grantAlvares(save, "ALVARES")).toBe(save)
     expect(grantAlvares(freshSave(), "Сталь").owned).toEqual(["t46", "pz2", "m3st"])
+  })
+
+  it("после покупки оборудования не возвращает серебро", () => {
+    const gifted = { ...grantAlvares(freshSave(), "alvares"), silver: 400000, selected: "t34" }
+    const bought = buyGear(gifted, "rammer")!
+    expect(bought.silver).toBe(250000)
+    expect(grantAlvares(bought, "alvares").silver).toBe(bought.silver)
+    expect(grantAlvares(bought, "alvares").depot.gear.rammer).toBe(1)
+  })
+})
+
+describe("admin", () => {
+  it("поднимает кошелёк до миллионов", () => {
+    const save = grantAdmin(freshSave(), "Admin")
+    expect(save.silver).toBe(99_000_000)
+    expect(save.gold).toBe(9_999_999)
+    expect(save.bonds).toBe(9_999_999)
+    expect(save.freeXp).toBe(9_999_999)
+    expect(grantAdmin(save, "admin")).toBe(save)
+    expect(grantAdmin(freshSave(), "Сталь").silver).toBe(24000)
   })
 })
 

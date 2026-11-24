@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import type { Save } from "../lib/garage"
-import { byId } from "../lib/vehicles"
+import { tryById } from "../lib/vehicles"
 import { musicEnabled, setMusic, setSfx, sfxEnabled } from "./sound"
 
 type Pane = "menu" | "profile" | "game"
@@ -14,7 +14,7 @@ export function Chrome({
 }) {
   const [pane, setPane] = useState<Pane | null>(null)
   const box = useRef<HTMLDivElement>(null)
-  const tank = byId(save.selected)
+  const tank = save.selected ? tryById(save.selected) : null
 
   useEffect(() => {
     if (!pane) return
@@ -57,7 +57,7 @@ export function Chrome({
             <button type="button" className="quiet" onClick={() => setPane("menu")}>назад</button>
             <p><small>ник</small><b>{nick}</b></p>
             <p><small>техники</small><b>{save.owned.length}</b></p>
-            <p><small>выбрана</small><b>{tank.name}</b></p>
+            <p><small>выбрана</small><b>{tank?.name ?? "—"}</b></p>
           </div>
         )}
         {pane === "game" && <GamePane onBack={() => setPane("menu")} />}

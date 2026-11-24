@@ -36,7 +36,7 @@ function all(base: Database, query: string, params: (string | number | null)[] =
   return out
 }
 
-export const CATALOG_REV = 1
+export const CATALOG_REV = 8
 
 export function catalogStale(base: Database): boolean {
   try {
@@ -67,7 +67,7 @@ function fillCatalog(base: Database) {
     "INSERT OR REPLACE INTO equipment (id, name, line, cost, reload, aim, dispersion, view, hp, speed, camo, he) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
   for (const g of GEAR) {
-    gear.run([g.id, g.name, g.line, g.cost, g.reload ?? null, g.aim ?? null, g.dispersion ?? null, g.view ?? null, g.hp ?? null, g.speed ?? null, g.camo ?? null, g.he ?? null])
+    gear.run([g.id, g.name, g.line, 0, g.reload ?? null, g.aim ?? null, g.dispersion ?? null, g.view ?? null, g.hp ?? null, g.speed ?? null, g.camo ?? null, g.he ?? null])
   }
   gear.free()
 
@@ -166,7 +166,6 @@ export function readGear(base: Database): Gear[] {
       id: String(item.id),
       name: String(item.name),
       line: String(item.line),
-      cost: Number(item.cost) || 0,
     }
     if (item.reload != null) gear.reload = Number(item.reload)
     if (item.aim != null) gear.aim = Number(item.aim)
